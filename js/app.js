@@ -3091,40 +3091,56 @@ function resetAll() {
 function init() {
   loadState();
   initNavigation();
+  // 激活 loadState 恢复的模块（HTML 默认 active 是 topic，需要同步到实际 currentModule）
+  if (AppState.currentModule && AppState.currentModule !== 'topic') {
+    switchModule(AppState.currentModule);
+  }
   initTopicModule();
   initTechModule();
   initDevModule();
   initDemoModule();
   initPitchModule();
 
+  // 初始化时选中第一个模块的第一个子项（在 UI 恢复之前，避免后续错误阻止导航）
+  const firstSub = MODULE_SUBMODULES[AppState.currentModule]?.[0];
+  if (firstSub) {
+    switchSubmodule(AppState.currentModule, firstSub.id);
+  }
+
   $('#exportBtn').addEventListener('click', exportReport);
   $('#resetBtn').addEventListener('click', resetAll);
 
-  // 恢复UI状态
-  if (AppState.topic.analyzed) {
-    $('#projectDescription').value = AppState.topic.description;
-    $('#charCount').textContent = `${AppState.topic.description.length} 字`;
-    if (AppState.topic.githubResults.length > 0) renderGithubResults(AppState.topic.githubResults);
-    const analysis = analyzeTopic(AppState.topic.description, extractKeywords(AppState.topic.description));
-    renderTopicResults(analysis, extractKeywords(AppState.topic.description));
-  }
+  // 恢复UI状态（try-catch 防止单个模块恢复失败影响整体）
+  try {
+    if (AppState.topic.analyzed) {
+      $('#projectDescription').value = AppState.topic.description;
+      $('#charCount').textContent = `${AppState.topic.description.length} 字`;
+      if (AppState.topic.githubResults.length > 0) renderGithubResults(AppState.topic.githubResults);
+      const analysis = analyzeTopic(AppState.topic.description, extractKeywords(AppState.topic.description));
+      renderTopicResults(analysis, extractKeywords(AppState.topic.description));
+    }
+  } catch(e) { console.warn('恢复选题模块UI失败:', e.message); }
 
-  if (AppState.dev.scanned) {
-    renderFileList();
-    renderScanResults();
-  }
+  try {
+    if (AppState.dev.scanned) {
+      renderFileList();
+      renderScanResults();
+    }
+  } catch(e) { console.warn('恢复代码扫描模块UI失败:', e.message); }
 
-  if (AppState.pitch.review.score > 0) {
-    $('#pitchScore').textContent = AppState.pitch.review.score;
-    $('#navScorePitch').textContent = AppState.pitch.review.score;
-    calculateReviewScore();
-  }
+  try {
+    if (AppState.pitch.review.score > 0) {
+      $('#pitchScore').textContent = AppState.pitch.review.score;
+      $('#navScorePitch').textContent = AppState.pitch.review.score;
+      calculateReviewScore();
+    }
 
-  if (AppState.pitch.generated) {
-    $('#pitchProjectName').value = localStorage.getItem('hackcheck_pitch_name') || '';
-    $('#pitchOneLiner').value = localStorage.getItem('hackcheck_pitch_liner') || '';
-    $('#pitchDescription').value = localStorage.getItem('hackcheck_pitch_desc') || '';
-  }
+    if (AppState.pitch.generated) {
+      $('#pitchProjectName').value = localStorage.getItem('hackcheck_pitch_name') || '';
+      $('#pitchOneLiner').value = localStorage.getItem('hackcheck_pitch_liner') || '';
+      $('#pitchDescription').value = localStorage.getItem('hackcheck_pitch_desc') || '';
+    }
+  } catch(e) { console.warn('恢复Pitch模块UI失败:', e.message); }
 
   updateOverallScore();
 
@@ -3134,12 +3150,6 @@ function init() {
   if (AppState.dev.score > 0) $('#navScoreDev').textContent = AppState.dev.score;
   if (AppState.demo.detected) $('#navScoreDemo').textContent = '✓';
   if (AppState.pitch.review.score > 0) $('#navScorePitch').textContent = AppState.pitch.review.score;
-
-  // 初始化时选中第一个模块的第一个子项
-  const firstSub = MODULE_SUBMODULES[AppState.currentModule]?.[0];
-  if (firstSub) {
-    switchSubmodule(AppState.currentModule, firstSub.id);
-  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
