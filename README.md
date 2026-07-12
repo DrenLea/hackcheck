@@ -23,7 +23,14 @@ A full-process assistant tool that helps zero-experience developers go from idea
 #### 1. 选题评审与查重
 
 - 集成 MyMemory 多语种翻译 API，自动将中文描述翻译为英文
-- 精准搜索 GitHub 上的同类项目
+- **6 渠道并行搜索**：GitHub / Devpost / Bing / 百度 / Wikipedia / DuckDuckGo
+  - GitHub：通过 API 搜索代码仓库（多查询回退策略）
+  - Devpost：通过 r.jina.ai 渲染 JS 后抓取黑客松项目
+  - Bing：通过 r.jina.ai 渲染 JS 后解析搜索引擎结果
+  - 百度：使用中文原词搜索，自动提取中文关键词
+  - Wikipedia：通过 CORS 友好的 API 搜索百科条目
+  - DuckDuckGo：通过 Instant Answer API 获取快速答案
+- 自动过滤 Bing 搜索结果中的广告（Sponsored）
 - 基于搜索结果数量和命中百分比计算稀缺度评分
 - 从原创性、稀缺度、意义感三个维度量化项目价值
 - 25+ 常见项目模式查重库，自动检测"换皮"项目
@@ -75,6 +82,10 @@ A full-process assistant tool that helps zero-experience developers go from idea
 - **外部 API**：
   - [MyMemory Translation API](https://mymemory.translated.net/) - 多语种翻译
   - [GitHub Search API](https://docs.github.com/en/rest/search) - 仓库搜索
+  - [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) - 百科搜索
+  - [DuckDuckGo Instant Answer API](https://duckduckgo.com/api) - 快速答案
+  - [r.jina.ai](https://r.jina.ai/) - JS渲染代理（用于 Bing/百度/Devpost 搜索）
+  - [corsproxy.io](https://corsproxy.io/) - CORS 代理（备用）
 - **数据存储**：LocalStorage（本地持久化，无需后端）
 - **部署**：纯静态文件，可部署到任何静态托管平台
 
@@ -136,7 +147,14 @@ A full-process assistant tool that helps zero-experience developers go from idea
 #### 1. Topic Review & Duplicate Detection
 
 - Integrated MyMemory multilingual translation API — auto-translates Chinese descriptions to English
-- Precise search for similar projects on GitHub
+- **6-channel parallel search**: GitHub / Devpost / Bing / Baidu / Wikipedia / DuckDuckGo
+  - GitHub: API-based repository search (multi-query fallback strategy)
+  - Devpost: Scrapes hackathon projects via r.jina.ai (JS rendering)
+  - Bing: Parses search engine results via r.jina.ai (JS rendering)
+  - Baidu: Searches with original Chinese keywords, auto-extracts Chinese terms
+  - Wikipedia: CORS-friendly API for encyclopedia articles
+  - DuckDuckGo: Instant Answer API for quick answers
+- Auto-filters sponsored (ad) results from Bing
 - Scarcity score calculated from search result count and hit percentage
 - Quantifies project value across three dimensions: originality, scarcity, and social impact
 - 25+ common project pattern library — auto-detects "reskin" projects
@@ -188,6 +206,10 @@ A full-process assistant tool that helps zero-experience developers go from idea
 - **External APIs**:
   - [MyMemory Translation API](https://mymemory.translated.net/) — Multilingual translation
   - [GitHub Search API](https://docs.github.com/en/rest/search) — Repository search
+  - [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) — Encyclopedia search
+  - [DuckDuckGo Instant Answer API](https://duckduckgo.com/api) — Quick answers
+  - [r.jina.ai](https://r.jina.ai/) — JS rendering proxy (for Bing/Baidu/Devpost search)
+  - [corsproxy.io](https://corsproxy.io/) — CORS proxy (fallback)
 - **Data Storage**: LocalStorage (client-side persistence, no backend needed)
 - **Deployment**: Pure static files, deployable to any static hosting platform
 

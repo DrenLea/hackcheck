@@ -245,7 +245,45 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .github-results { margin-bottom: 24px; }
+.multi-channel-results { margin-bottom: 24px; }
 .repo-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* 多渠道搜索统计 */
+.channel-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;
+}
+@media (max-width: 600px) {
+  .channel-stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.channel-stat-card {
+  padding: 14px 10px; background: var(--bg-surface); border-radius: var(--radius-md);
+  border: 1px solid var(--border); text-align: center; transition: var(--transition);
+}
+.channel-stat-card:hover { border-color: var(--border-hover); }
+.channel-stat-card.empty { opacity: 0.5; }
+.channel-stat-icon { font-size: 22px; margin-bottom: 4px; }
+.channel-stat-name { font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+.channel-stat-num { font-size: 22px; font-weight: 800; color: var(--accent-primary); font-family: 'Syne', sans-serif; }
+.channel-stat-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+/* 渠道Tab */
+.channel-tabs {
+  display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border); padding-bottom: 8px;
+}
+.channel-tab {
+  padding: 8px 14px; background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-sm); color: var(--text-secondary);
+  font-size: 13px; cursor: pointer; transition: var(--transition);
+  font-family: inherit;
+}
+.channel-tab:hover:not(.disabled) { background: var(--bg-surface); color: var(--text-primary); }
+.channel-tab.active { background: var(--accent-primary); color: var(--bg-base); font-weight: 600; }
+.channel-tab.disabled { opacity: 0.4; cursor: not-allowed; }
+.channel-content { min-height: 200px; }
+.channel-empty {
+  padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;
+}
 .repo-card {
   padding: 14px 16px; background: var(--bg-surface); border-radius: var(--radius-md);
   border: 1px solid var(--border); transition: var(--transition);

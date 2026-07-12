@@ -113,7 +113,7 @@ async function handleTopicSearch() {
 
   AppState.topic.description = desc;
   $('#searchStatus').style.display = 'block';
-  $('#githubResults').style.display = 'none';
+  $('#multiChannelResults').style.display = 'none';
   $('#topicResults').style.display = 'none';
 
   // 更新加载状态：正在翻译
@@ -121,7 +121,7 @@ async function handleTopicSearch() {
 
   // 1. 调用翻译API将描述翻译为英文（支持多语种输入）
   let translatedText = '';
-  let translationSource = 'conceptMap'; // 默认用概念映射
+  let translationSource = 'conceptMap';
   try {
     translatedText = await translateText(desc);
     if (translatedText && translatedText.length > 3) {
@@ -131,10 +131,10 @@ async function handleTopicSearch() {
     console.warn('Translation API failed, falling back to conceptMap:', e);
   }
 
-  // 更新加载状态：正在搜索
-  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在搜索 GitHub 上的相似项目...</span></div>';
+  // 更新加载状态：正在多渠道搜索
+  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在搜索 GitHub / Devpost / Bing / 百度 / Wikipedia / DuckDuckGo ...</span></div>';
 
-  // 2. 提取关键词（如果翻译成功，从翻译文本提取；否则用概念映射）
+  // 2. 提取关键词
   let keywordGroups;
   if (translationSource === 'api' && translatedText) {
     keywordGroups = extractKeywordsFromEnglish(translatedText, desc);
@@ -142,54 +142,498 @@ async function handleTopicSearch() {
     keywordGroups = extractKeywordGroups(desc);
   }
 
-  // 3. 搜索GitHub - 尝试多个查询，从精准到宽泛
-  let searchStats = { totalCount: 0, repos: [], hitRatio: 0, matchedCount: 0 };
-  try {
-    const terms = keywordGroups.searchTerms;
-    const queries = [];
-    if (terms.length >= 3) queries.push(terms.slice(0, 3).join(' '));
-    if (terms.length >= 2) queries.push(terms.slice(0, 2).join(' '));
-    if (terms.length >= 1) queries.push(terms[0]);
+  // 3. 提取中文关键词（用于百度搜索和中文结果命中匹配）
+  const chineseKeywords = desc.split(/[，。；！？\s,;!?]/).filter(w => w.length >= 2 && /[\u4e00-\u9fa5]/.test(w)).slice(0, 5);
+  keywordGroups.allTerms = [...new Set([...keywordGroups.allTerms, ...chineseKeywords])];
 
-    let ghResult = null;
-    for (const q of queries) {
-      ghResult = await searchGitHubRepos(q);
-      if (ghResult.total_count > 0 && ghResult.items.length > 0) {
-        searchStats.usedQuery = q;
-        break;
-      }
-    }
+  // 4. 并行搜索多个渠道
+  const searchQuery = keywordGroups.searchQuery || keywordGroups.searchTerms.slice(0, 3).join(' ');
+  const channelResults = await multiChannelSearch(searchQuery, keywordGroups.allTerms, desc);
 
-    if (ghResult) {
-      searchStats.totalCount = ghResult.total_count || 0;
-      searchStats.repos = ghResult.items || [];
-      searchStats = calculateHitRatio(searchStats, keywordGroups.allTerms, searchStats.usedQuery);
-      searchStats.allTerms = keywordGroups.allTerms;
-      AppState.topic.githubResults = searchStats.repos;
-      renderGithubResults(searchStats.repos, searchStats);
-    } else {
-      $('#githubResults').style.display = 'none';
-    }
-  } catch(e) {
-    console.warn('GitHub search failed:', e);
-    $('#githubResults').style.display = 'none';
-  }
+  // 5. 渲染多渠道搜索结果
+  renderMultiChannelResults(channelResults, keywordGroups);
 
-  // 4. 分析稀缺度
-  const analysis = analyzeTopic(desc, keywordGroups, searchStats);
+  // 7. 分析稀缺度（基于GitHub结果 + Devpost结果综合计算）
+  const ghStats = channelResults.find(c => c.id === 'github')?.stats || { totalCount: 0, repos: [], hitRatio: 0, matchedCount: 0 };
+  const dpStats = channelResults.find(c => c.id === 'devpost')?.stats || { totalCount: 0, repos: [], hitRatio: 0, matchedCount: 0 };
+  const combinedStats = {
+    totalCount: ghStats.totalCount + (dpStats.totalCount || 0),
+    repos: [...(ghStats.repos || []), ...(dpStats.repos || [])],
+    hitRatio: ghStats.hitRatio,
+    matchedCount: ghStats.matchedCount + (dpStats.matchedCount || 0),
+    allTerms: keywordGroups.allTerms,
+    usedQuery: searchQuery,
+    channelResults: channelResults,
+  };
+
+  // 8. 分析稀缺度
+  const analysis = analyzeTopic(desc, keywordGroups, combinedStats);
   AppState.topic.score = analysis.compositeScore;
   AppState.topic.multiScores = analysis.multiScores;
   AppState.topic.analyzed = true;
 
-  renderTopicResults(analysis, keywordGroups, searchStats);
+  renderTopicResults(analysis, keywordGroups, combinedStats);
   updateOverallScore();
   saveState();
 
   $('#searchStatus').style.display = 'none';
   const toastMsg = translationSource === 'api'
-    ? `翻译+搜索完成！英文关键词: "${keywordGroups.searchQuery}"`
+    ? `翻译+多渠道搜索完成！英文关键词: "${searchQuery}"`
     : '搜索完成（翻译API不可用，使用概念映射）';
   showToast(toastMsg, 'success');
+}
+
+// 从中文描述中提取关键词（用于百度搜索）
+function extractChineseKeywords(desc) {
+  if (!desc) return '';
+  // 取第一句话或前40个字符
+  const firstSentence = desc.split(/[，。；！？\n,;!?]/)[0].trim();
+  const query = firstSentence.length > 40 ? firstSentence.substring(0, 40) : firstSentence;
+  return query || desc.substring(0, 30);
+}
+
+// 多渠道并行搜索
+async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
+  // GitHub: 尝试多个查询（从精准到宽泛），取第一个有结果的
+  const searchTerms = searchQuery.split(' ');
+  const ghQueries = [];
+  if (searchTerms.length >= 3) ghQueries.push(searchTerms.slice(0, 3).join(' '));
+  if (searchTerms.length >= 2) ghQueries.push(searchTerms.slice(0, 2).join(' '));
+  ghQueries.push(searchTerms[0]);
+
+  // 百度使用中文原词搜索
+  const baiduQuery = extractChineseKeywords(originalDesc);
+
+  const channels = [
+    { id: 'github', name: 'GitHub', icon: '🐙', searchFn: async () => {
+      for (const q of ghQueries) {
+        const r = await searchGitHubRepos(q);
+        if (r.total_count > 0 && r.items.length > 0) return r;
+      }
+      return { items: [], total_count: 0 };
+    }},
+    { id: 'devpost', name: 'Devpost', icon: '🏆', searchFn: () => searchDevpost(searchQuery) },
+    { id: 'bing', name: 'Bing', icon: '🔍', searchFn: () => searchBing(searchQuery) },
+    { id: 'baidu', name: '百度', icon: '🔎', searchFn: () => searchBaidu(baiduQuery) },
+    { id: 'wikipedia', name: 'Wikipedia', icon: '📚', searchFn: () => searchWikipedia(searchQuery) },
+    { id: 'duckduckgo', name: 'DuckDuckGo', icon: '🦆', searchFn: () => searchDuckDuckGo(searchQuery) },
+  ];
+
+  // 并行搜索所有渠道
+  const results = await Promise.allSettled(
+    channels.map(async ch => {
+      try {
+        const data = await ch.searchFn();
+        return { ...ch, data, stats: calculateChannelStats(ch.id, data, allTerms, searchQuery), error: null };
+      } catch(e) {
+        console.warn(`Channel ${ch.id} failed:`, e);
+        return { ...ch, data: null, stats: { totalCount: 0, repos: [], hitRatio: 0, matchedCount: 0 }, error: e.message };
+      }
+    })
+  );
+
+  return results.map(r => r.value);
+}
+
+// 搜索 Devpost 黑客松项目（通过 r.jina.ai 渲染JS后解析Markdown）
+async function searchDevpost(searchQuery) {
+  const targetUrl = `https://devpost.com/software/search?query=${encodeURIComponent(searchQuery)}`;
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+
+  let text = '';
+  try {
+    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
+    if (resp.ok) {
+      text = await resp.text();
+    }
+  } catch(e) {
+    console.warn(`Devpost r.jina.ai failed:`, e.message);
+    throw new Error('Devpost search failed (timeout)');
+  }
+
+  if (!text || text.length < 500) throw new Error('Devpost: empty response');
+
+  // 解析Markdown提取项目信息
+  // 格式: [![Image](thumbnail) ##### ProjectName Description...](https://devpost.com/software/slug)
+  const projects = [];
+  const seen = new Set();
+
+  // 提取所有 Devpost 项目链接
+  const linkRegex = /\]\((https:\/\/devpost\.com\/software\/([^)"'?#]+)[^)]*)\)/g;
+  let match;
+  while ((match = linkRegex.exec(text)) !== null && projects.length < 8) {
+    const url = match[1];
+    const slug = match[2];
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+
+    // 在链接附近查找项目名称和描述
+    const contextStart = Math.max(0, match.index - 600);
+    const contextEnd = Math.min(text.length, match.index + 200);
+    const context = text.substring(contextStart, contextEnd);
+
+    // 提取 ##### 后的名称和描述
+    const nameMatch = context.match(/#####\s+(.+)/);
+    let name = slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    let desc = '';
+
+    if (nameMatch) {
+      const nameAndDesc = nameMatch[1].trim();
+      // 名称是前几个词（大写的），描述是后面的内容
+      const parts = nameAndDesc.split(/(?<=\S)\s{2,}|\.\s+/);
+      if (parts.length >= 2) {
+        name = parts[0].trim();
+        desc = parts.slice(1).join('. ').trim();
+      } else {
+        // 尝试另一种方式：名称后面跟着描述
+        const descStart = nameAndDesc.indexOf(name) + name.length;
+        desc = nameAndDesc.substring(descStart).trim();
+      }
+    }
+
+    projects.push({
+      name: name,
+      slug: slug,
+      description: desc.substring(0, 200),
+      url: url,
+      isWinner: false,
+      stars: '🏆',
+    });
+  }
+
+  if (projects.length === 0) throw new Error('Devpost: no results parsed');
+  return { items: projects, total_count: projects.length };
+}
+
+// 搜索 Wikipedia 相关词条
+async function searchWikipedia(searchQuery) {
+  const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&format=json&srlimit=5&origin=*`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Wikipedia API error');
+  const data = await resp.json();
+
+  const items = (data.query?.search || []).map(item => ({
+    name: item.title,
+    description: item.snippet ? item.snippet.replace(/<[^>]+>/g, '') : '',
+    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, '_'))}`,
+    stars: '📖',
+  }));
+
+  return { items, total_count: data.query?.searchinfo?.totalhits || 0 };
+}
+
+// 搜索 DuckDuckGo Instant Answer
+async function searchDuckDuckGo(searchQuery) {
+  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1&skip_disambig=1`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('DuckDuckGo API error');
+  const data = await resp.json();
+
+  const items = [];
+
+  // 主结果
+  if (data.Heading && data.AbstractText) {
+    items.push({
+      name: data.Heading,
+      description: data.AbstractText,
+      url: data.AbstractURL || `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery)}`,
+      stars: '🔗',
+    });
+  }
+
+  // 相关话题
+  if (data.RelatedTopics) {
+    data.RelatedTopics.forEach(topic => {
+      if (topic.Text && topic.FirstURL && items.length < 5) {
+        items.push({
+          name: topic.Text.split(' - ')[0] || topic.Text.substring(0, 50),
+          description: topic.Text,
+          url: topic.FirstURL,
+          stars: '🔗',
+        });
+      }
+    });
+  }
+
+  return { items, total_count: items.length };
+}
+
+// 搜索 Bing 搜索引擎（通过 r.jina.ai 渲染JS后解析Markdown）
+async function searchBing(searchQuery) {
+  const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}&count=10`;
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+
+  let text = '';
+  try {
+    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
+    if (resp.ok) {
+      text = await resp.text();
+    }
+  } catch(e) {
+    console.warn(`Bing r.jina.ai failed:`, e.message);
+    throw new Error('Bing search failed (timeout)');
+  }
+
+  if (!text || text.length < 500) throw new Error('Bing: empty response');
+
+  // 解析Markdown提取搜索结果
+  // 格式: ## [Title](bing_redirect_url) 后跟描述文本
+  const results = [];
+  const lines = text.split('\n');
+  const seen = new Set();
+
+  for (let i = 0; i < lines.length && results.length < 8; i++) {
+    const line = lines[i];
+    // 匹配 ## [Title](URL) 或 ### [Title](URL)
+    const headingMatch = line.match(/^#{2,3}\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
+    if (headingMatch) {
+      const title = headingMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+      const url = headingMatch[2];
+
+      // 跳过Bing自身的链接
+      if (url.includes('bing.com/search') || url.includes('bing.com/ck/a')) {
+        // 仍然记录，但使用Bing搜索URL作为回退
+      }
+      if (seen.has(url)) continue;
+      seen.add(url);
+
+      // 提取描述（下一行或下两行的非空文本）
+      let desc = '';
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const nextLine = lines[j].trim();
+        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') && nextLine.length > 15) {
+          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+          break;
+        }
+      }
+
+      if (title && title.length > 2 && !desc.startsWith('Sponsored')) {
+        results.push({ name: title, description: desc, url: url, stars: '🔍' });
+      }
+    }
+  }
+
+  if (results.length === 0) throw new Error('Bing: no results parsed');
+  return { items: results, total_count: results.length };
+}
+
+// 搜索百度搜索引擎（使用中文关键词，通过 r.jina.ai 渲染JS后解析Markdown）
+async function searchBaidu(chineseQuery) {
+  if (!chineseQuery || chineseQuery.length < 2) throw new Error('Baidu: no Chinese query');
+
+  const targetUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(chineseQuery)}&rn=10`;
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+
+  let text = '';
+  try {
+    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
+    if (resp.ok) {
+      text = await resp.text();
+    }
+  } catch(e) {
+    console.warn(`Baidu r.jina.ai failed:`, e.message);
+    throw new Error('Baidu search failed (timeout)');
+  }
+
+  if (!text || text.length < 500) throw new Error('Baidu: empty response');
+
+  // 解析Markdown提取搜索结果
+  // 百度结果格式多样:
+  // 1. ### [Title](baidu_link_url) - 带标题的链接
+  // 2. [![Image](img_url)](baidu_link_url) - 图片链接，后跟描述文本
+  // 3. 日期 + 描述文本
+  const results = [];
+  const lines = text.split('\n');
+  const seen = new Set();
+
+  for (let i = 0; i < lines.length && results.length < 8; i++) {
+    const line = lines[i];
+
+    // 方案1: 匹配 ### [Title](URL) 标题链接
+    const headingMatch = line.match(/^#{2,4}\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
+    if (headingMatch) {
+      const title = headingMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/_/g, '').trim();
+      const url = headingMatch[2];
+      if (url.includes('baidu.com/s?') || url.includes('baidu.com/?')) continue;
+      if (seen.has(url)) continue;
+      seen.add(url);
+
+      let desc = '';
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const nextLine = lines[j].trim();
+        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') && !nextLine.startsWith('[') && nextLine.length > 10) {
+          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/_/g, '').trim();
+          break;
+        }
+      }
+
+      if (title && title.length > 2) {
+        results.push({ name: title, description: desc, url: url, stars: '🔍' });
+      }
+      continue;
+    }
+
+    // 方案2: 匹配 [![Image](img_url)](baidu_link_url) 图片链接
+    const imgLinkMatch = line.match(/\[!\[Image[^\]]*\]\([^)]+\)\]\((https?:\/\/[^)]+)\)/);
+    if (imgLinkMatch) {
+      const url = imgLinkMatch[1];
+      if (url.includes('baidu.com/s?') || seen.has(url)) continue;
+      seen.add(url);
+
+      // 查找附近的描述文本（向前和向后搜索）
+      let desc = '';
+      let title = '';
+      for (let j = Math.max(0, i - 3); j <= Math.min(i + 3, lines.length - 1); j++) {
+        if (j === i) continue;
+        const nearbyLine = lines[j].trim();
+        // 日期模式
+        const dateMatch = nearbyLine.match(/(\d{4}年\d{1,2}月\d{1,2}日)/);
+        // 描述文本（较长的非空行）
+        if (nearbyLine && !nearbyLine.startsWith('#') && !nearbyLine.startsWith('![') && !nearbyLine.startsWith('[') && nearbyLine.length > 15) {
+          if (!desc) desc = nearbyLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/_/g, '').trim();
+        }
+      }
+
+      // 从描述中提取标题（前20个字符）
+      title = desc ? desc.substring(0, 30) + (desc.length > 30 ? '...' : '') : '百度搜索结果';
+
+      if (title && title.length > 2) {
+        results.push({ name: title, description: desc, url: url, stars: '🔍' });
+      }
+    }
+  }
+
+  if (results.length === 0) throw new Error('Baidu: no results parsed');
+  return { items: results, total_count: results.length };
+}
+
+// 计算各渠道搜索统计
+function calculateChannelStats(channelId, data, allTerms, usedQuery) {
+  if (!data || !data.items || data.items.length === 0) {
+    return { totalCount: 0, repos: [], hitRatio: 0, matchedCount: 0 };
+  }
+
+  const repos = data.items;
+  const totalCount = data.total_count || repos.length;
+
+  // 命中率计算
+  const usedQueryTerms = (usedQuery || '').toLowerCase().split(/\s+/);
+  const specificTerms = allTerms.filter(t => !usedQueryTerms.includes(t.toLowerCase()));
+  const checkTerms = specificTerms.length > 0 ? specificTerms : allTerms;
+
+  let matched = 0;
+  repos.forEach(repo => {
+    const text = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
+    const matchCount = checkTerms.filter(term => text.includes(term.toLowerCase())).length;
+    if (matchCount >= 1) matched++;
+  });
+
+  return {
+    totalCount,
+    repos,
+    matchedCount: matched,
+    hitRatio: repos.length > 0 ? matched / repos.length : 0,
+  };
+}
+
+// 渲染多渠道搜索结果
+function renderMultiChannelResults(channelResults, keywordGroups) {
+  const container = $('#multiChannelResults');
+  const hasAnyResult = channelResults.some(ch => ch.data && ch.data.items && ch.data.items.length > 0);
+
+  if (!hasAnyResult) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+
+  // 1. 渲染统计总览
+  const statsHTML = channelResults.map(ch => {
+    const stats = ch.stats || { totalCount: 0, matchedCount: 0, hitRatio: 0 };
+    const hasResult = stats.repos && stats.repos.length > 0;
+    const hitPct = Math.round((stats.hitRatio || 0) * 100);
+    return `
+      <div class="channel-stat-card ${hasResult ? '' : 'empty'}">
+        <div class="channel-stat-icon">${ch.icon}</div>
+        <div class="channel-stat-name">${ch.name}</div>
+        <div class="channel-stat-num">${stats.totalCount}</div>
+        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} 命中 · ${hitPct}%` : (ch.error ? '搜索失败' : '无结果')}</div>
+      </div>
+    `;
+  }).join('');
+  $('#searchChannelStats').innerHTML = `<div class="channel-stats-grid">${statsHTML}</div>`;
+
+  // 2. 渲染Tab
+  const tabsHTML = channelResults.map((ch, i) => {
+    const count = ch.stats?.repos?.length || 0;
+    const hasResult = count > 0;
+    return `
+      <button class="channel-tab ${i === 0 && hasResult ? 'active' : ''} ${hasResult ? '' : 'disabled'}" data-channel="${ch.id}">
+        ${ch.icon} ${ch.name} ${hasResult ? `(${count})` : ''}
+      </button>
+    `;
+  }).join('');
+  $('#channelTabs').innerHTML = tabsHTML;
+
+  // 3. 默认显示第一个有结果的渠道
+  const firstWithResult = channelResults.find(ch => ch.stats?.repos?.length > 0);
+  if (firstWithResult) {
+    renderChannelContent(firstWithResult, keywordGroups.allTerms);
+  }
+
+  // 4. 绑定Tab切换
+  $$('.channel-tab').forEach(tab => {
+    if (tab.classList.contains('disabled')) return;
+    tab.addEventListener('click', () => {
+      $$('.channel-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const chId = tab.dataset.channel;
+      const ch = channelResults.find(c => c.id === chId);
+      if (ch) renderChannelContent(ch, keywordGroups.allTerms);
+    });
+  });
+}
+
+// 渲染单个渠道的内容
+function renderChannelContent(channel, allTerms) {
+  const repos = channel.stats?.repos || [];
+  if (repos.length === 0) {
+    $('#channelContent').innerHTML = '<div class="channel-empty">该渠道未搜索到相关结果</div>';
+    return;
+  }
+
+  const totalCount = channel.stats.totalCount;
+  const matchedCount = channel.stats.matchedCount || 0;
+  const hitRatio = Math.round((channel.stats.hitRatio || 0) * 100);
+  const totalCountLabel = totalCount > 1000 ? `${(totalCount/1000).toFixed(1)}k` : totalCount;
+
+  let statsHTML = `<div class="search-stats">`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${totalCountLabel}</span><span class="stat-label">${channel.name}总结果</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${matchedCount}/${repos.length}</span><span class="stat-label">命中相关</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${hitRatio}%</span><span class="stat-label">命中百分比</span></div>`;
+  statsHTML += `</div>`;
+
+  const reposHTML = repos.map(repo => {
+    const repoText = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
+    const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
+    return `
+    <div class="repo-card ${isHit ? 'hit' : 'miss'}">
+      <div class="repo-header">
+        <a href="${repo.url || repo.html_url || '#'}" target="_blank" class="repo-name">${repo.name || repo.full_name}</a>
+        <span class="repo-stars">${repo.stars || (repo.stargazers_count ? '⭐ ' + repo.stargazers_count : '')}</span>
+      </div>
+      <p class="repo-desc">${repo.description || '暂无描述'}</p>
+      <div class="repo-meta">
+        ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
+        ${repo.updated_at ? `<span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>` : ''}
+        ${isHit ? '<span class="repo-hit">✅ 命中</span>' : '<span class="repo-miss">⚪ 不相关</span>'}
+      </div>
+    </div>
+  `;
+  }).join('');
+
+  $('#channelContent').innerHTML = statsHTML + reposHTML;
 }
 
 // 调用 MyMemory 翻译API（免费、CORS支持、无需API Key）

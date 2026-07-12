@@ -159,14 +159,22 @@
         <div class="search-status" id="searchStatus" style="display:none;">
           <div class="search-loading">
             <div class="loading-spinner"></div>
-            <span>正在搜索 GitHub 和 Devpost 上的相似项目...</span>
+            <span>正在搜索 GitHub / Devpost / Bing / 百度 / Wikipedia / DuckDuckGo ...</span>
           </div>
         </div>
 
-        <!-- GitHub 搜索结果 -->
-        <div class="github-results" id="githubResults" style="display:none;">
-          <h3 class="section-title">🔍 GitHub 相似项目搜索结果</h3>
-          <div class="repo-list" id="repoList"></div>
+        <!-- 多渠道搜索结果 -->
+        <div class="multi-channel-results" id="multiChannelResults" style="display:none;">
+          <h3 class="section-title">🔍 多渠道相似项目搜索结果</h3>
+
+          <!-- 搜索统计总览 -->
+          <div class="search-channel-stats" id="searchChannelStats"></div>
+
+          <!-- 渠道Tab切换 -->
+          <div class="channel-tabs" id="channelTabs"></div>
+
+          <!-- 当前渠道结果列表 -->
+          <div class="channel-content" id="channelContent"></div>
         </div>
 
         <!-- 分析结果 -->

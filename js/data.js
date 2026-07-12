@@ -196,6 +196,11 @@ const TOPIC_DATA = {
     { name: 'Devpost', icon: '🏆', url: 'https://devpost.com/software/search?query=', desc: '最大的黑客松项目展示平台' },
     { name: 'GitHub', icon: '🐙', url: 'https://github.com/search?q=', desc: '搜索开源代码仓库' },
     { name: 'ProductHunt', icon: '🚀', url: 'https://www.producthunt.com/search?q=', desc: '发现最新产品创意' },
+    { name: 'Bing', icon: '🔍', url: 'https://www.bing.com/search?q=', desc: '微软搜索引擎，覆盖面广' },
+    { name: '百度', icon: '🔎', url: 'https://www.baidu.com/s?wd=', desc: '中文搜索引擎，适合中文项目' },
+    { name: 'Kaggle', icon: '📊', url: 'https://www.kaggle.com/search?q=', desc: '数据科学竞赛与项目平台' },
+    { name: 'Hackathon.io', icon: '🌐', url: 'https://www.hackathon.io/search?q=', desc: '黑客松项目搜索' },
+    { name: 'Google', icon: '🔍', url: 'https://www.google.com/search?q=', desc: '全球搜索引擎' },
   ],
 };
 
