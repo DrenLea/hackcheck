@@ -31,3 +31,10 @@ Thumbs.db
 # Proposal (internal documents, not for public repo)
 hackcheck-proposal/
 pitch.html
+
+# Design docs and specs (internal planning documents)
+docs/superpowers/
+
+# Python cache
+__pycache__/
+*.pyc
