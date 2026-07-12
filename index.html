@@ -170,7 +170,7 @@
           </div>
         </div>
 
-        <div class="topic-input">
+        <div class="topic-input" data-submodule="description">
           <label class="input-label">📝 描述你的项目想法</label>
           <textarea id="projectDescription" class="project-textarea"
             placeholder="描述你的项目：要解决什么问题？核心功能是什么？目标用户是谁？&#10;&#10;例如：一个基于AI的老年人用药提醒应用，通过语音识别理解老人的自然语言指令，自动生成用药计划。"></textarea>
@@ -185,6 +185,7 @@
           </div>
         </div>
 
+        <div data-submodule="search">
         <!-- 搜索状态 -->
         <div class="search-status" id="searchStatus" style="display:none;">
           <div class="search-loading">
@@ -206,7 +207,9 @@
           <!-- 当前渠道结果列表 -->
           <div class="channel-content" id="channelContent"></div>
         </div>
+        </div>
 
+        <div data-submodule="analysis">
         <!-- 分析结果 -->
         <div class="topic-results" id="topicResults" style="display:none;">
           <div class="topic-score-section">
@@ -239,7 +242,10 @@
             <h4 class="detail-title">🎯 差异化策略推荐</h4>
             <div id="differentiationStrategies"></div>
           </div>
+        </div>
+        </div>
 
+        <div data-submodule="strategies">
           <div class="search-suggestions">
             <h4 class="detail-title">🔎 手动查重平台</h4>
             <p class="search-hint">在以下平台搜索你的项目关键词，检查是否有高度相似的项目：</p>
@@ -263,7 +269,7 @@
           </div>
         </div>
 
-        <div class="tech-config">
+        <div class="tech-config" data-submodule="config">
           <div class="config-item">
             <label class="config-label">⏱️ 参赛时长</label>
             <select id="hackathonDuration" class="config-select">
@@ -294,17 +300,17 @@
         </div>
 
         <!-- 预设方案 -->
-        <div class="preset-plans-section">
+        <div class="preset-plans-section" data-submodule="presets">
           <h3 class="section-title">💡 快速选型方案（点击一键应用）</h3>
           <div class="preset-plans" id="presetPlans"></div>
         </div>
 
-        <div class="tech-selector">
+        <div class="tech-selector" data-submodule="manual">
           <h3 class="section-title">或手动选择技术</h3>
           <div class="tech-categories" id="techCategories"></div>
         </div>
 
-        <div class="tech-results" id="techResults" style="display:none;">
+        <div class="tech-results" id="techResults" data-submodule="results" style="display:none;">
           <div class="tech-results-grid">
             <div class="result-card">
               <div class="result-card-header"><span class="result-icon">📊</span><span class="result-title">复杂度评估</span></div>
@@ -332,7 +338,7 @@
         </div>
 
         <!-- 分工推荐 -->
-        <div class="division-section" id="divisionSection" style="display:none;">
+        <div class="division-section" id="divisionSection" data-submodule="division" style="display:none;">
           <h3 class="section-title">👥 团队分工推荐</h3>
           <div class="division-strategy" id="divisionStrategy"></div>
           <div class="division-roles" id="divisionRoles"></div>
@@ -340,7 +346,7 @@
         </div>
 
         <!-- 时间线 -->
-        <div class="timeline-section" id="timelineSection" style="display:none;">
+        <div class="timeline-section" id="timelineSection" data-submodule="timeline" style="display:none;">
           <h3 class="section-title">📅 开发时间线</h3>
           <div class="timeline-track" id="timelineTrack"></div>
         </div>
@@ -359,6 +365,7 @@
           </div>
         </div>
 
+        <div data-submodule="upload">
         <div class="scan-intro">
           <div class="scan-intro-text">
             <p>上传你的项目文件或整个代码仓库，系统将自动扫描：</p>
@@ -386,8 +393,10 @@
           </div>
           <div class="file-list" id="fileList"></div>
         </div>
+        </div>
 
         <!-- 扫描结果 -->
+        <div data-submodule="results">
         <div class="scan-results" id="scanResults" style="display:none;">
           <!-- 扫描摘要 -->
           <div class="scan-summary" id="scanSummary"></div>
@@ -419,6 +428,7 @@
           <!-- 修复建议 -->
           <div class="scan-fixes" id="scanFixes"></div>
         </div>
+        </div>
       </section>
 
       <!-- ====================== 阶段4: Demo辅助 ====================== -->
@@ -431,14 +441,14 @@
         </div>
 
         <!-- Git版本控制教程 -->
-        <div class="git-tutorial-section">
+        <div class="git-tutorial-section" data-submodule="git">
           <h3 class="section-title">📦 Git版本控制 & GitHub上传</h3>
           <p class="section-desc">黑客松必备：用Git管理代码版本，上传到GitHub方便评委查看和部署</p>
           <div class="git-steps" id="gitSteps"></div>
         </div>
 
         <!-- 项目类型检测 -->
-        <div class="project-detect-section">
+        <div class="project-detect-section" data-submodule="detect">
           <h3 class="section-title">🔎 项目类型检测</h3>
           <div class="detect-input">
             <label class="input-label">上传 package.json 或选择项目类型</label>
@@ -456,6 +466,7 @@
           <div class="detected-type" id="detectedType" style="display:none;"></div>
         </div>
 
+        <div data-submodule="deploy">
         <!-- 部署推荐 -->
         <div class="deploy-recommendations" id="deployRecommendations" style="display:none;">
           <h3 class="section-title">🚀 推荐部署平台</h3>
@@ -473,6 +484,7 @@
           <h3 class="section-title">⚙️ 部署配置文件</h3>
           <div class="config-gen" id="configGen"></div>
         </div>
+        </div>
       </section>
 
       <!-- ====================== 阶段5: Pitch & 评审 ====================== -->
@@ -489,7 +501,7 @@
         </div>
 
         <!-- 项目信息输入 -->
-        <div class="pitch-input-section">
+        <div class="pitch-input-section" data-submodule="info">
           <h3 class="section-title">📝 项目信息</h3>
           <div class="pitch-form">
             <div class="form-row">
@@ -517,7 +529,7 @@
         </div>
 
         <!-- Pitch 结果 -->
-        <div class="pitch-result" id="pitchResult" style="display:none;">
+        <div class="pitch-result" id="pitchResult" data-submodule="pitch" style="display:none;">
           <h3 class="section-title">🎤 Pitch 演讲稿结构</h3>
           <div class="pitch-structure" id="pitchStructure"></div>
           <div class="pitch-export">
@@ -526,7 +538,7 @@
         </div>
 
         <!-- 模拟评审 -->
-        <div class="review-section">
+        <div class="review-section" data-submodule="review">
           <h3 class="section-title">🎯 模拟Agent评审</h3>
           <div class="review-intro">
             <p>5个AI评审员将根据你输入的项目信息，自动从5个维度评估你的项目并给出具体反馈。</p>
