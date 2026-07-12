@@ -890,3 +890,37 @@ const PITCH_DATA = {
     { condition: 'accessibility', priority: 'P3', action: '改善可访问性，添加alt文本和ARIA标签' },
   ],
 };
+
+// ============================================
+// 模块子项导航配置
+// ============================================
+const MODULE_SUBMODULES = {
+  topic: [
+    { id: 'description',  label: '项目描述',   icon: '📝' },
+    { id: 'search',       label: '搜索结果',   icon: '🔍' },
+    { id: 'analysis',     label: '稀缺度分析', icon: '📊' },
+    { id: 'strategies',   label: '差异化策略', icon: '🎯' },
+  ],
+  tech: [
+    { id: 'config',       label: '团队配置',   icon: '⚙️' },
+    { id: 'presets',      label: '预设方案',   icon: '💡' },
+    { id: 'manual',       label: '手动选型',   icon: '🔧' },
+    { id: 'results',      label: '评估结果',   icon: '📈' },
+    { id: 'division',     label: '团队分工',   icon: '👥' },
+    { id: 'timeline',     label: '开发时间线', icon: '📅' },
+  ],
+  dev: [
+    { id: 'upload',       label: '文件上传',   icon: '📂' },
+    { id: 'results',      label: '扫描结果',   icon: '🔒' },
+  ],
+  demo: [
+    { id: 'git',          label: 'Git教程',    icon: '📦' },
+    { id: 'detect',       label: '项目检测',   icon: '🔎' },
+    { id: 'deploy',       label: '部署方案',   icon: '🚀' },
+  ],
+  pitch: [
+    { id: 'info',         label: '项目信息',   icon: '📝' },
+    { id: 'pitch',        label: 'Pitch演讲稿',icon: '🎤' },
+    { id: 'review',       label: '模拟评审',   icon: '🎯' },
+  ],
+};
