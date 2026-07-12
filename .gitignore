@@ -28,5 +28,6 @@ Thumbs.db
 # Trae temporary files
 .trae-html-share-packages/
 
-# Proposal (internal document, not for public repo)
+# Proposal (internal documents, not for public repo)
 hackcheck-proposal/
+pitch.html
