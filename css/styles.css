@@ -166,6 +166,123 @@ body {
 .sidebar-tip span:last-child { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
 
 /* ============================================
+   Sidebar Toggle & Sub-navigation
+   ============================================ */
+.sidebar-toggle {
+  padding: 6px;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar {
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.collapsed {
+  width: 56px;
+}
+.sidebar.collapsed .nav-content,
+.sidebar.collapsed .nav-score,
+.sidebar.collapsed .nav-arrow,
+.sidebar.collapsed .nav-children,
+.sidebar.collapsed .sidebar-label,
+.sidebar.collapsed .overall-score-card,
+.sidebar.collapsed .sidebar-footer {
+  display: none;
+}
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+.sidebar.collapsed .nav-group {
+  position: relative;
+}
+
+/* 子项列表（展开模式） */
+.nav-group {
+  position: relative;
+}
+.nav-children {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 32px;
+  padding-top: 4px;
+}
+.nav-group.expanded .nav-children {
+  display: flex;
+}
+.nav-sub-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+.nav-sub-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.nav-sub-item.active {
+  color: var(--accent-primary);
+  background: rgba(0,255,163,0.06);
+}
+
+/* 展开箭头 */
+.nav-arrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.nav-group.expanded .nav-arrow {
+  transform: rotate(0deg);
+}
+.nav-group:not(.expanded) .nav-arrow {
+  transform: rotate(-90deg);
+}
+
+/* Hover Flyout（窄栏模式） */
+.nav-flyout {
+  display: none;
+  position: absolute;
+  left: 56px;
+  top: 0;
+  min-width: 200px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 8px;
+  z-index: 200;
+}
+.sidebar.collapsed .nav-group:hover .nav-flyout {
+  display: block;
+}
+.nav-flyout-title {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.nav-flyout .nav-sub-item {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+/* ============================================
    Main Content
    ============================================ */
 .main-content {
