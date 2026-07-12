@@ -8,6 +8,7 @@
 // ============================================
 const AppState = {
   currentModule: 'topic',
+  currentSubmodule: null,
   topic: {
     description: '',
     score: 0,
@@ -68,14 +69,124 @@ function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 // 导航
 // ============================================
 function initNavigation() {
-  $$('.nav-item').forEach(item => {
-    item.addEventListener('click', () => switchModule(item.dataset.module));
+  // 模块项点击：切换模块或折叠/展开子项
+  $$('.nav-item[data-module]').forEach(item => {
+    item.addEventListener('click', () => {
+      const moduleId = item.dataset.module;
+      if (AppState.currentModule === moduleId) {
+        // 已是当前模块，仅折叠/展开子项
+        toggleSubmenu(moduleId);
+      } else {
+        // 切换到新模块（switchModule 内部已处理手风琴展开）
+        switchModule(moduleId);
+        // 默认选中第一个子项
+        const firstSub = MODULE_SUBMODULES[moduleId]?.[0];
+        if (firstSub) {
+          switchSubmodule(moduleId, firstSub.id);
+        }
+      }
+    });
   });
+
+  // 折叠按钮
+  $('#sidebarToggle')?.addEventListener('click', toggleSidebar);
+
+  // 渲染子项
+  renderSubmodules();
 }
 function switchModule(name) {
   AppState.currentModule = name;
+  AppState.currentSubmodule = null;
   $$('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.module === name));
   $$('.module-section').forEach(s => s.classList.toggle('active', s.id === `module-${name}`));
+  // 手风琴：展开当前模块子项，折叠其他
+  $$('.nav-group').forEach(g => {
+    g.classList.toggle('expanded', g.dataset.module === name);
+  });
+  $('.main-content').scrollTop = 0;
+}
+
+// 折叠/展开侧边栏
+function toggleSidebar() {
+  $('#sidebar').classList.toggle('collapsed');
+}
+
+// 展开/折叠模块的子项列表（手风琴效果）
+function toggleSubmenu(moduleId) {
+  $$('.nav-group').forEach(group => {
+    if (group.dataset.module === moduleId) {
+      group.classList.toggle('expanded');
+    } else {
+      group.classList.remove('expanded');
+    }
+  });
+}
+
+// 从 MODULE_SUBMODULES 渲染子项列表和 flyout 面板
+function renderSubmodules() {
+  Object.entries(MODULE_SUBMODULES).forEach(([moduleId, subs]) => {
+    const container = $(`#navChildren-${moduleId}`);
+    if (!container) return;
+
+    // 渲染展开模式的子项列表
+    container.innerHTML = subs.map(sub => `
+      <button class="nav-sub-item" data-module="${moduleId}" data-submodule="${sub.id}">
+        <span>${sub.icon}</span>
+        <span>${sub.label}</span>
+      </button>
+    `).join('');
+
+    // 渲染窄栏 flyout 面板
+    const group = container.closest('.nav-group');
+    if (!group) return;
+    let flyout = group.querySelector('.nav-flyout');
+    if (!flyout) {
+      flyout = document.createElement('div');
+      flyout.className = 'nav-flyout';
+      group.appendChild(flyout);
+    }
+    const moduleTitle = group.querySelector('.nav-title')?.textContent || moduleId;
+    flyout.innerHTML = `
+      <div class="nav-flyout-title">${moduleTitle}</div>
+      ${subs.map(sub => `
+        <button class="nav-sub-item" data-module="${moduleId}" data-submodule="${sub.id}">
+          <span>${sub.icon}</span>
+          <span>${sub.label}</span>
+        </button>
+      `).join('')}
+    `;
+  });
+
+  // 绑定子项点击事件（展开模式 + flyout 共用）
+  $$('.nav-sub-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      switchSubmodule(item.dataset.module, item.dataset.submodule);
+    });
+  });
+}
+
+// 切换子项：只显示对应区块，隐藏其他
+function switchSubmodule(moduleId, subId) {
+  if (AppState.currentModule !== moduleId) {
+    switchModule(moduleId);
+  }
+  AppState.currentSubmodule = subId;
+
+  // 隐藏该模块下所有 data-submodule 区块，只显示选中的
+  const moduleEl = $(`#module-${moduleId}`);
+  if (moduleEl) {
+    moduleEl.querySelectorAll('[data-submodule]').forEach(el => {
+      el.style.display = el.dataset.submodule === subId ? '' : 'none';
+    });
+  }
+
+  // 更新子项高亮
+  $$('.nav-sub-item').forEach(el => {
+    const match = el.dataset.module === moduleId && el.dataset.submodule === subId;
+    el.classList.toggle('active', match);
+  });
+
   $('.main-content').scrollTop = 0;
 }
 
@@ -3023,6 +3134,12 @@ function init() {
   if (AppState.dev.score > 0) $('#navScoreDev').textContent = AppState.dev.score;
   if (AppState.demo.detected) $('#navScoreDemo').textContent = '✓';
   if (AppState.pitch.review.score > 0) $('#navScorePitch').textContent = AppState.pitch.review.score;
+
+  // 初始化时选中第一个模块的第一个子项
+  const firstSub = MODULE_SUBMODULES[AppState.currentModule]?.[0];
+  if (firstSub) {
+    switchSubmodule(AppState.currentModule, firstSub.id);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
