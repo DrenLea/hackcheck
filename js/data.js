@@ -178,6 +178,12 @@ const TOPIC_DATA = {
     { keyword: 'children', label: '儿童安全', boost: 2, scarcityBoost: 2, meaningBoost: 4, type: 'social' },
     { keyword: 'digital inclusion', label: '数字包容', boost: 2, scarcityBoost: 3, meaningBoost: 3, type: 'social' },
     { keyword: 'local first', label: '本地优先/离线可用', boost: 2, scarcityBoost: 3, meaningBoost: 2, type: 'tech' },
+    { keyword: 'deaf', label: '聋人辅助', boost: 3, scarcityBoost: 4, meaningBoost: 5, type: 'social' },
+    { keyword: 'blind', label: '盲人辅助', boost: 3, scarcityBoost: 4, meaningBoost: 5, type: 'social' },
+    { keyword: 'disability', label: '残障人士辅助', boost: 3, scarcityBoost: 4, meaningBoost: 5, type: 'social' },
+    { keyword: 'agriculture', label: '农业科技', boost: 3, scarcityBoost: 3, meaningBoost: 4, type: 'social' },
+    { keyword: 'carbon', label: '碳中和/减碳', boost: 3, scarcityBoost: 4, meaningBoost: 5, type: 'social' },
+    { keyword: 'emergency', label: '应急响应', boost: 4, scarcityBoost: 4, meaningBoost: 5, type: 'social' },
   ],
 
   // 蓝海方向推荐
@@ -195,6 +201,7 @@ const TOPIC_DATA = {
   searchPlatforms: [
     { name: 'Devpost', icon: '🏆', url: 'https://devpost.com/software/search?query=', desc: '最大的黑客松项目展示平台' },
     { name: 'GitHub', icon: '🐙', url: 'https://github.com/search?q=', desc: '搜索开源代码仓库' },
+    { name: 'Watcha', icon: '🇨🇳', url: 'https://watcha.cn/search?query=', desc: '中文AI产品发现平台，发现国内同类产品' },
     { name: 'ProductHunt', icon: '🚀', url: 'https://www.producthunt.com/search?q=', desc: '发现最新产品创意' },
     { name: 'Bing', icon: '🔍', url: 'https://www.bing.com/search?q=', desc: '微软搜索引擎，覆盖面广' },
     { name: '百度', icon: '🔎', url: 'https://www.baidu.com/s?wd=', desc: '中文搜索引擎，适合中文项目' },

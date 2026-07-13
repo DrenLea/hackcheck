@@ -223,6 +223,8 @@ async function handleTopicSearch() {
   }
 
   AppState.topic.description = desc;
+  // 切换到搜索结果子页，让用户看到搜索状态
+  switchSubmodule('topic', 'search');
   $('#searchStatus').style.display = 'block';
   $('#multiChannelResults').style.display = 'none';
   $('#topicResults').style.display = 'none';
@@ -243,7 +245,7 @@ async function handleTopicSearch() {
   }
 
   // 更新加载状态：正在多渠道搜索
-  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在搜索 GitHub / Devpost / Bing / 百度 / Wikipedia / DuckDuckGo ...</span></div>';
+  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在搜索 GitHub / Devpost / Watcha / ProductHunt / Bing / 百度 / Wikipedia / DuckDuckGo ...</span></div>';
 
   // 2. 提取关键词
   let keywordGroups;
@@ -288,6 +290,8 @@ async function handleTopicSearch() {
   saveState();
 
   $('#searchStatus').style.display = 'none';
+  // 切换到分析结果子页，展示稀缺度分析
+  switchSubmodule('topic', 'analysis');
   const toastMsg = translationSource === 'api'
     ? `翻译+多渠道搜索完成！英文关键词: "${searchQuery}"`
     : '搜索完成（翻译API不可用，使用概念映射）';
@@ -324,6 +328,8 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
       return { items: [], total_count: 0 };
     }},
     { id: 'devpost', name: 'Devpost', icon: '🏆', searchFn: () => searchDevpost(searchQuery) },
+    { id: 'watcha', name: 'Watcha', icon: '🇨🇳', searchFn: () => searchWatcha(baiduQuery) },
+    { id: 'producthunt', name: 'ProductHunt', icon: '🚀', searchFn: () => searchProductHunt(searchQuery) },
     { id: 'bing', name: 'Bing', icon: '🔍', searchFn: () => searchBing(searchQuery) },
     { id: 'baidu', name: '百度', icon: '🔎', searchFn: () => searchBaidu(baiduQuery) },
     { id: 'wikipedia', name: 'Wikipedia', icon: '📚', searchFn: () => searchWikipedia(searchQuery) },
@@ -616,6 +622,136 @@ async function searchBaidu(chineseQuery) {
 
   if (results.length === 0) throw new Error('Baidu: no results parsed');
   return { items: results, total_count: results.length };
+}
+
+// 搜索 watcha.cn 中文AI产品库（通过 r.jina.ai 渲染JS后解析Markdown）
+async function searchWatcha(chineseQuery) {
+  if (!chineseQuery || chineseQuery.length < 2) throw new Error('Watcha: no query');
+
+  const targetUrl = `https://watcha.cn/search?query=${encodeURIComponent(chineseQuery)}`;
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+
+  let text = '';
+  try {
+    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
+    if (resp.ok) {
+      text = await resp.text();
+    }
+  } catch(e) {
+    console.warn('Watcha r.jina.ai failed:', e.message);
+    throw new Error('Watcha search failed (timeout)');
+  }
+
+  if (!text || text.length < 500) throw new Error('Watcha: empty response');
+
+  // 解析Markdown提取产品信息
+  // watcha.cn产品链接格式: https://watcha.cn/products/<slug>
+  const products = [];
+  const seen = new Set();
+  const lines = text.split('\n');
+
+  for (let i = 0; i < lines.length && products.length < 8; i++) {
+    const line = lines[i];
+
+    // 匹配 [产品名](https://watcha.cn/products/slug) 格式
+    const productMatch = line.match(/\[([^\]]+)\]\((https:\/\/watcha\.cn\/products\/[^)"'?#]+)[^)]*\)/);
+    if (productMatch) {
+      const name = productMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+      const url = productMatch[2];
+      const slug = url.split('/products/')[1];
+
+      // 跳过非产品链接（如 logo、图片等）
+      if (name.length < 2 || seen.has(slug)) continue;
+      seen.add(slug);
+
+      // 在后续行查找描述
+      let desc = '';
+      for (let j = i + 1; j <= Math.min(i + 4, lines.length - 1); j++) {
+        const nextLine = lines[j].trim();
+        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') &&
+            !nextLine.startsWith('[') && !nextLine.startsWith('---') &&
+            nextLine.length > 10 && !nextLine.includes('查看更多')) {
+          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+          break;
+        }
+      }
+
+      // 提取评分（如果行中有数字评分）
+      const ratingMatch = line.match(/(\d+\.?\d*)\s*[猹评]/);
+      const rating = ratingMatch ? ratingMatch[1] : '';
+
+      products.push({
+        name: name,
+        description: desc || `${name} - watcha.cn 上的 AI 产品`,
+        url: url,
+        stars: rating || '🇨🇳',
+      });
+    }
+  }
+
+  if (products.length === 0) throw new Error('Watcha: no results parsed');
+  return { items: products, total_count: products.length };
+}
+
+// 搜索 Product Hunt 英文产品库（通过 r.jina.ai 渲染JS后解析Markdown）
+async function searchProductHunt(searchQuery) {
+  const targetUrl = `https://www.producthunt.com/search?q=${encodeURIComponent(searchQuery)}`;
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+
+  let text = '';
+  try {
+    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
+    if (resp.ok) {
+      text = await resp.text();
+    }
+  } catch(e) {
+    console.warn('ProductHunt r.jina.ai failed:', e.message);
+    throw new Error('ProductHunt search failed (timeout)');
+  }
+
+  if (!text || text.length < 500) throw new Error('ProductHunt: empty response');
+
+  // 解析Markdown提取产品信息
+  const products = [];
+  const seen = new Set();
+  const lines = text.split('\n');
+
+  for (let i = 0; i < lines.length && products.length < 8; i++) {
+    const line = lines[i];
+
+    // 匹配 Product Hunt 产品链接
+    const productMatch = line.match(/\[([^\]]+)\]\((https?:\/\/(?:www\.)?producthunt\.com\/products\/[^)"'?#]+)[^)]*\)/);
+    if (productMatch) {
+      const name = productMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+      const url = productMatch[2];
+      const slug = url.split('/products/')[1];
+
+      if (name.length < 2 || seen.has(slug)) continue;
+      seen.add(slug);
+
+      // 在后续行查找描述
+      let desc = '';
+      for (let j = i + 1; j <= Math.min(i + 4, lines.length - 1); j++) {
+        const nextLine = lines[j].trim();
+        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') &&
+            !nextLine.startsWith('[') && !nextLine.startsWith('---') &&
+            nextLine.length > 10) {
+          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+          break;
+        }
+      }
+
+      products.push({
+        name: name,
+        description: desc || `${name} - Product Hunt product`,
+        url: url,
+        stars: '🚀',
+      });
+    }
+  }
+
+  if (products.length === 0) throw new Error('ProductHunt: no results parsed');
+  return { items: products, total_count: products.length };
 }
 
 // 计算各渠道搜索统计
