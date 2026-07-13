@@ -229,10 +229,10 @@ async function handleTopicSearch() {
   $('#multiChannelResults').style.display = 'none';
   $('#topicResults').style.display = 'none';
 
-  // 更新加载状态：正在翻译
-  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在翻译项目描述为英文...</span></div>';
+  // 简洁的加载提示
+  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在多渠道搜索相似项目...</span></div>';
 
-  // 1. 调用翻译API将描述翻译为英文（支持多语种输入）
+  // 1. 后台翻译（不向用户展示翻译过程）
   let translatedText = '';
   let translationSource = 'conceptMap';
   try {
@@ -243,9 +243,6 @@ async function handleTopicSearch() {
   } catch(e) {
     console.warn('Translation API failed, falling back to conceptMap:', e);
   }
-
-  // 更新加载状态：正在多渠道搜索
-  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在搜索 GitHub / Devpost / Watcha / ProductHunt / Bing / 百度 / Wikipedia / DuckDuckGo ...</span></div>';
 
   // 2. 提取关键词
   let keywordGroups;
@@ -279,8 +276,16 @@ async function handleTopicSearch() {
     channelResults: channelResults,
   };
 
-  // 8. 分析稀缺度
-  const analysis = analyzeTopic(desc, keywordGroups, combinedStats);
+  // 8. 社媒需求发现（与稀缺度分析并行）
+  let socialDemand = { level: 'weak', modifier: 0, signals: [] };
+  try {
+    socialDemand = await searchSocialDemand(searchQuery, desc);
+  } catch(e) {
+    console.warn('Social demand search failed:', e.message);
+  }
+
+  // 9. 分析稀缺度（含社媒需求调节）
+  const analysis = analyzeTopic(desc, keywordGroups, combinedStats, socialDemand);
   AppState.topic.score = analysis.compositeScore;
   AppState.topic.multiScores = analysis.multiScores;
   AppState.topic.analyzed = true;
@@ -290,12 +295,9 @@ async function handleTopicSearch() {
   saveState();
 
   $('#searchStatus').style.display = 'none';
-  // 切换到分析结果子页，展示稀缺度分析
-  switchSubmodule('topic', 'analysis');
-  const toastMsg = translationSource === 'api'
-    ? `翻译+多渠道搜索完成！英文关键词: "${searchQuery}"`
-    : '搜索完成（翻译API不可用，使用概念映射）';
-  showToast(toastMsg, 'success');
+  // 搜索完成后停留在搜索结果子页
+  switchSubmodule('topic', 'search');
+  showToast('搜索完成！点击「稀缺度分析」查看详细评分', 'success');
 }
 
 // 从中文描述中提取关键词（用于百度搜索）
@@ -305,6 +307,44 @@ function extractChineseKeywords(desc) {
   const firstSentence = desc.split(/[，。；！？\n,;!?]/)[0].trim();
   const query = firstSentence.length > 40 ? firstSentence.substring(0, 40) : firstSentence;
   return query || desc.substring(0, 30);
+}
+
+// 统一的代理抓取工具：先试 r.jina.ai，失败后回退到 allorigins.win
+async function fetchViaProxy(targetUrl) {
+  // 方案1: r.jina.ai（返回Markdown，解析最方便）
+  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
+  try {
+    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(30000) });
+    if (resp.ok) {
+      const text = await resp.text();
+      if (text && text.length > 200) return text;
+    }
+  } catch(e) {
+    console.warn(`r.jina.ai failed for ${targetUrl}:`, e.message);
+  }
+
+  // 方案2: allorigins.win（返回原始HTML，转换为简易Markdown）
+  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+  try {
+    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(30000) });
+    if (resp.ok) {
+      const html = await resp.text();
+      if (html && html.length > 200) {
+        // 将HTML中的<a>标签转换为Markdown链接格式
+        return html
+          .replace(/<a[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis, (_, url, text) => {
+            const cleanText = text.replace(/<[^>]+>/g, '').trim();
+            return cleanText ? `[${cleanText}](${url})` : '';
+          })
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\n{3,}/g, '\n\n');
+      }
+    }
+  } catch(e) {
+    console.warn(`allorigins.win failed for ${targetUrl}:`, e.message);
+  }
+
+  throw new Error('All proxies failed');
 }
 
 // 多渠道并行搜索
@@ -336,9 +376,18 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
     { id: 'duckduckgo', name: 'DuckDuckGo', icon: '🦆', searchFn: () => searchDuckDuckGo(searchQuery) },
   ];
 
-  // 并行搜索所有渠道
+  // 并行搜索所有渠道（对代理渠道添加错峰延迟避免限流）
+  const proxyChannelIds = ['devpost', 'watcha', 'producthunt', 'bing', 'baidu'];
+  let proxyIndex = 0;
   const results = await Promise.allSettled(
     channels.map(async ch => {
+      // 代理渠道错峰：第2个开始加500ms递增延迟
+      if (proxyChannelIds.includes(ch.id)) {
+        proxyIndex++;
+        if (proxyIndex > 1) {
+          await new Promise(r => setTimeout(r, 600 * (proxyIndex - 1)));
+        }
+      }
       try {
         const data = await ch.searchFn();
         return { ...ch, data, stats: calculateChannelStats(ch.id, data, allTerms, searchQuery), error: null };
@@ -352,20 +401,16 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
   return results.map(r => r.value);
 }
 
-// 搜索 Devpost 黑客松项目（通过 r.jina.ai 渲染JS后解析Markdown）
+// 搜索 Devpost 黑客松项目（通过代理渲染JS后解析Markdown）
 async function searchDevpost(searchQuery) {
   const targetUrl = `https://devpost.com/software/search?query=${encodeURIComponent(searchQuery)}`;
-  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
 
   let text = '';
   try {
-    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
-    if (resp.ok) {
-      text = await resp.text();
-    }
+    text = await fetchViaProxy(targetUrl);
   } catch(e) {
-    console.warn(`Devpost r.jina.ai failed:`, e.message);
-    throw new Error('Devpost search failed (timeout)');
+    console.warn('Devpost proxy failed:', e.message);
+    throw new Error('Devpost search failed');
   }
 
   if (!text || text.length < 500) throw new Error('Devpost: empty response');
@@ -475,20 +520,16 @@ async function searchDuckDuckGo(searchQuery) {
   return { items, total_count: items.length };
 }
 
-// 搜索 Bing 搜索引擎（通过 r.jina.ai 渲染JS后解析Markdown）
+// 搜索 Bing 搜索引擎（通过代理渲染JS后解析Markdown）
 async function searchBing(searchQuery) {
   const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}&count=10`;
-  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
 
   let text = '';
   try {
-    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
-    if (resp.ok) {
-      text = await resp.text();
-    }
+    text = await fetchViaProxy(targetUrl);
   } catch(e) {
-    console.warn(`Bing r.jina.ai failed:`, e.message);
-    throw new Error('Bing search failed (timeout)');
+    console.warn('Bing proxy failed:', e.message);
+    throw new Error('Bing search failed');
   }
 
   if (!text || text.length < 500) throw new Error('Bing: empty response');
@@ -534,21 +575,17 @@ async function searchBing(searchQuery) {
   return { items: results, total_count: results.length };
 }
 
-// 搜索百度搜索引擎（使用中文关键词，通过 r.jina.ai 渲染JS后解析Markdown）
+// 搜索百度搜索引擎（使用中文关键词，通过代理渲染JS后解析Markdown）
 async function searchBaidu(chineseQuery) {
   if (!chineseQuery || chineseQuery.length < 2) throw new Error('Baidu: no Chinese query');
 
   const targetUrl = `https://www.baidu.com/s?wd=${encodeURIComponent(chineseQuery)}&rn=10`;
-  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
 
   let text = '';
   try {
-    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
-    if (resp.ok) {
-      text = await resp.text();
-    }
+    text = await fetchViaProxy(targetUrl);
   } catch(e) {
-    console.warn(`Baidu r.jina.ai failed:`, e.message);
+    console.warn('Baidu proxy failed:', e.message);
     throw new Error('Baidu search failed (timeout)');
   }
 
@@ -624,22 +661,18 @@ async function searchBaidu(chineseQuery) {
   return { items: results, total_count: results.length };
 }
 
-// 搜索 watcha.cn 中文AI产品库（通过 r.jina.ai 渲染JS后解析Markdown）
+// 搜索 watcha.cn 中文AI产品库（通过代理渲染JS后解析Markdown）
 async function searchWatcha(chineseQuery) {
   if (!chineseQuery || chineseQuery.length < 2) throw new Error('Watcha: no query');
 
   const targetUrl = `https://watcha.cn/search?query=${encodeURIComponent(chineseQuery)}`;
-  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
 
   let text = '';
   try {
-    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
-    if (resp.ok) {
-      text = await resp.text();
-    }
+    text = await fetchViaProxy(targetUrl);
   } catch(e) {
-    console.warn('Watcha r.jina.ai failed:', e.message);
-    throw new Error('Watcha search failed (timeout)');
+    console.warn('Watcha proxy failed:', e.message);
+    throw new Error('Watcha search failed');
   }
 
   if (!text || text.length < 500) throw new Error('Watcha: empty response');
@@ -693,20 +726,16 @@ async function searchWatcha(chineseQuery) {
   return { items: products, total_count: products.length };
 }
 
-// 搜索 Product Hunt 英文产品库（通过 r.jina.ai 渲染JS后解析Markdown）
+// 搜索 Product Hunt 英文产品库（通过代理渲染JS后解析Markdown）
 async function searchProductHunt(searchQuery) {
   const targetUrl = `https://www.producthunt.com/search?q=${encodeURIComponent(searchQuery)}`;
-  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
 
   let text = '';
   try {
-    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(20000) });
-    if (resp.ok) {
-      text = await resp.text();
-    }
+    text = await fetchViaProxy(targetUrl);
   } catch(e) {
-    console.warn('ProductHunt r.jina.ai failed:', e.message);
-    throw new Error('ProductHunt search failed (timeout)');
+    console.warn('ProductHunt proxy failed:', e.message);
+    throw new Error('ProductHunt search failed');
   }
 
   if (!text || text.length < 500) throw new Error('ProductHunt: empty response');
@@ -752,6 +781,83 @@ async function searchProductHunt(searchQuery) {
 
   if (products.length === 0) throw new Error('ProductHunt: no results parsed');
   return { items: products, total_count: products.length };
+}
+
+// 社媒需求发现：搜索 Reddit/V2EX 中的真实用户需求表达
+async function searchSocialDemand(searchQuery, chineseQuery) {
+  const demandSignals = [];
+  const searchUrls = [
+    `https://www.reddit.com/search/?q=${encodeURIComponent('I wish there was ' + searchQuery)}&sort=relevance&t=year`,
+    `https://www.reddit.com/search/?q=${encodeURIComponent('why is there no ' + searchQuery)}&sort=relevance&t=year`,
+  ];
+  if (chineseQuery && chineseQuery.length > 2) {
+    searchUrls.push(`https://www.v2ex.com/api/topics/search.json?q=${encodeURIComponent('要是有一个 ' + chineseQuery)}`);
+  }
+
+  const results = await Promise.allSettled(
+    searchUrls.map(async (url) => {
+      try {
+        if (url.includes('v2ex.com')) {
+          const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+          if (!resp.ok) return [];
+          const data = await resp.json();
+          return (data || []).map(item => ({
+            source: 'V2EX',
+            title: item.title || '',
+            content: item.content || item.title || '',
+            url: `https://www.v2ex.com/t/${item.id}`,
+          }));
+        } else {
+          const text = await fetchViaProxy(url);
+          const signals = [];
+          const patterns = [
+            /I wish there (?:was|were) [^.!?]*/i,
+            /why is there no [^.!?]*/i,
+            /someone (?:should|needs to) (?:build|make|create) [^.!?]*/i,
+            /would (?:love|pay) (?:to )?(?:see|have) [^.!?]*/i,
+          ];
+          patterns.forEach(p => {
+            const matches = text.match(new RegExp(p.source, 'gi'));
+            if (matches) signals.push(...matches.slice(0, 3));
+          });
+          return signals.map(s => ({
+            source: 'Reddit',
+            title: s.substring(0, 100),
+            content: s,
+            url: url,
+          }));
+        }
+      } catch(e) {
+        console.warn(`Social demand search failed:`, e.message);
+        return [];
+      }
+    })
+  );
+
+  results.forEach(r => {
+    if (r.status === 'fulfilled' && r.value) demandSignals.push(...r.value);
+  });
+
+  // 评估需求强度
+  let level = 'weak';
+  let modifier = 0;
+  if (demandSignals.length >= 3) {
+    level = 'strong';
+    modifier = 10;
+  } else if (demandSignals.length >= 1) {
+    level = 'medium';
+    modifier = 5;
+  }
+
+  // 检测伪需求
+  const falseDemandPatterns = /already (?:exists|have|good enough)|已经(?:有|够用)|不需要再/i;
+  const hasFalseDemand = demandSignals.some(s => falseDemandPatterns.test(s.content || s.title || ''));
+  if (hasFalseDemand && demandSignals.length < 3) {
+    level = 'false_demand';
+    modifier = -10;
+  }
+
+  return { level, modifier, signals: demandSignals.slice(0, 5) };
 }
 
 // 计算各渠道搜索统计
@@ -1108,9 +1214,10 @@ function renderGithubResults(repos, searchStats) {
   }).join('');
 }
 
-function analyzeTopic(description, keywordGroups, searchStats) {
+function analyzeTopic(description, keywordGroups, searchStats, socialDemand) {
   const descLower = description.toLowerCase();
   const allTerms = keywordGroups.allTerms || [];
+  const socialDemandMod = socialDemand ? socialDemand.modifier : 0;
 
   // 1. 检测匹配的常见模式
   const matchedPatterns = [];
@@ -1178,8 +1285,8 @@ function analyzeTopic(description, keywordGroups, searchStats) {
   const scarcityScore = searchScarcity;
   // 原创性：基于模式匹配扣分 + 加分因素 + 搜索稀缺度加权
   const originalityScore = clamp(Math.round(originalityBase - patternPenalty + matchedBoosters.length * 3 + searchScarcity * 0.15), 10, 98);
-  // 意义感：基于加分因素和模式的意义评级
-  const meaningScore = clamp(Math.round(meaningBase), 10, 98);
+  // 意义感：基于加分因素和模式的意义评级，加上社媒需求调节
+  const meaningScore = clamp(Math.round(meaningBase) + socialDemandMod, 10, 98);
   // 综合分：稀缺度权重最高（40%），原创性（35%），意义感（25%）
   const compositeScore = Math.round(scarcityScore * 0.4 + originalityScore * 0.35 + meaningScore * 0.25);
 
@@ -1194,6 +1301,7 @@ function analyzeTopic(description, keywordGroups, searchStats) {
     multiScores: { originality: originalityScore, scarcity: scarcityScore, meaning: meaningScore },
     compositeScore, oceanType,
     searchStats: { totalCount, hitRatio, matchedCount: searchStats.matchedCount || 0, resultCount: (searchStats.repos || []).length },
+    socialDemand: socialDemand || { level: 'weak', modifier: 0, signals: [] },
     differentiation: matchedPatterns.length > 0 ? matchedPatterns[0].differentiation : [],
     patternName: matchedPatterns.length > 0 ? matchedPatterns[0].pattern : null
   };
@@ -1262,6 +1370,42 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
       <div class="multi-score-info"><span>综合稀缺指数</span><span class="multi-score-value">${score}</span></div>
     </div>
   `;
+
+  // 社媒需求发现结果
+  if (analysis.socialDemand) {
+    const sd = analysis.socialDemand;
+    const levelMap = {
+      strong: { icon: '🔥', label: '强需求', color: 'var(--accent-success)', desc: '发现多个真实用户需求表达，社会价值显著' },
+      medium: { icon: '✅', label: '中等需求', color: 'var(--accent-primary)', desc: '发现部分用户需求讨论' },
+      weak: { icon: '❓', label: '需求待验证', color: 'var(--text-muted)', desc: '未找到明确的需求表达，建议进一步调研' },
+      false_demand: { icon: '⚠️', label: '伪需求', color: 'var(--accent-warning)', desc: '用户认为现有方案已够用，需重新考量' },
+    };
+    const lv = levelMap[sd.level] || levelMap.weak;
+    const modText = sd.modifier > 0 ? `(+${sd.modifier})` : (sd.modifier < 0 ? `(${sd.modifier})` : '');
+    let sdHTML = `<div class="social-demand-card" style="border-color:${lv.color}">
+      <div class="social-demand-header">
+        <span class="social-demand-icon">${lv.icon}</span>
+        <span class="social-demand-label">社媒需求发现</span>
+        <span class="social-demand-level" style="color:${lv.color}">${lv.label} ${modText}</span>
+      </div>
+      <p class="social-demand-desc">${lv.desc}</p>`;
+
+    if (sd.signals && sd.signals.length > 0) {
+      sdHTML += '<div class="social-demand-signals">';
+      sd.signals.forEach(s => {
+        sdHTML += `<div class="demand-signal-item">
+          <span class="demand-signal-source">${s.source}</span>
+          <span class="demand-signal-text">${s.title.substring(0, 80)}</span>
+        </div>`;
+      });
+      sdHTML += '</div>';
+    }
+    sdHTML += '</div>';
+
+    // 插入到 multiScores 之后
+    const msEl = $('#topicMultiScores');
+    msEl.insertAdjacentHTML('beforeend', sdHTML);
+  }
 
   // 查重结果
   if (analysis.matchedPatterns.length > 0) {
