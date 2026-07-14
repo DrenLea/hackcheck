@@ -1123,13 +1123,17 @@ function renderChannelContent(channel, allTerms) {
     const repoText = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
     const hidden = idx >= 3 ? 'style="display:none;"' : '';
+    const desc = repo.description || '暂无描述';
+    // 描述超过3行（约120字符）时折叠
+    const isLongDesc = desc.length > 120;
     return `
     <div class="repo-card ${isHit ? 'hit' : 'miss'} repo-item-${idx >= 3 ? 'extra' : 'visible'}" ${hidden}>
       <div class="repo-header">
         <a href="${repo.url || repo.html_url || '#'}" target="_blank" class="repo-name">${repo.name || repo.full_name}</a>
         <span class="repo-stars">${repo.stars || (repo.stargazers_count ? '⭐ ' + repo.stargazers_count : '')}</span>
       </div>
-      <p class="repo-desc">${repo.description || '暂无描述'}</p>
+      <p class="repo-desc ${isLongDesc ? 'collapsed' : ''}" ${isLongDesc ? `onclick="toggleDescExpand(this)"` : ''}>${desc}</p>
+      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">展开 ▼</span>' : ''}
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
         ${repo.updated_at ? `<span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>` : ''}
@@ -1161,6 +1165,19 @@ function toggleRepoExpand() {
   extras.forEach(el => { el.style.display = isHidden ? '' : 'none'; });
   if (text) text.textContent = isHidden ? '折叠结果' : `展开剩余 ${extras.length} 条结果`;
   if (icon) icon.textContent = isHidden ? '▲' : '▼';
+}
+
+// 展开/折叠单条搜索结果的描述
+function toggleDescExpand(el) {
+  const card = el.closest('.repo-card');
+  if (!card) return;
+  const desc = card.querySelector('.repo-desc');
+  const toggle = card.querySelector('.repo-desc-toggle');
+  if (!desc) return;
+
+  const isCollapsed = desc.classList.contains('collapsed');
+  desc.classList.toggle('collapsed');
+  if (toggle) toggle.textContent = isCollapsed ? '折叠 ▲' : '展开 ▼';
 }
 
 // 调用 MyMemory 翻译API（免费、CORS支持、无需API Key）
@@ -1371,13 +1388,16 @@ function renderGithubResults(repos, searchStats) {
     const repoText = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
     const allTerms = (searchStats.allTerms || []);
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
+    const desc = repo.description || '暂无描述';
+    const isLongDesc = desc.length > 120;
     return `
     <div class="repo-card ${isHit ? 'hit' : 'miss'}">
       <div class="repo-header">
         <a href="${repo.html_url}" target="_blank" class="repo-name">${repo.full_name}</a>
         <span class="repo-stars">⭐ ${repo.stargazers_count}</span>
       </div>
-      <p class="repo-desc">${repo.description || '暂无描述'}</p>
+      <p class="repo-desc ${isLongDesc ? 'collapsed' : ''}" ${isLongDesc ? `onclick="toggleDescExpand(this)"` : ''}>${desc}</p>
+      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">展开 ▼</span>' : ''}
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
         <span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>

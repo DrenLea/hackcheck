@@ -419,6 +419,15 @@ body {
 .repo-name:hover { text-decoration: underline; }
 .repo-stars { font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
 .repo-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 6px; }
+.repo-desc.collapsed {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; cursor: pointer;
+}
+.repo-desc-toggle {
+  font-size: 12px; color: var(--accent-primary); cursor: pointer;
+  user-select: none; display: inline-block; margin-bottom: 6px;
+}
+.repo-desc-toggle:hover { text-decoration: underline; }
 .repo-meta { display: flex; gap: 12px; font-size: 11px; align-items: center; }
 .repo-lang { color: var(--accent-secondary); }
 .repo-updated { color: var(--text-muted); }
