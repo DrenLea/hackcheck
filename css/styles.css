@@ -425,6 +425,21 @@ body {
 .repo-hit { color: var(--accent-success); font-size: 11px; font-weight: 600; }
 .repo-miss { color: var(--text-muted); font-size: 11px; }
 
+/* 展开/折叠按钮 */
+.repo-expand-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 16px; margin-top: 8px;
+  background: var(--bg-surface); border: 1px dashed var(--border-hover);
+  border-radius: var(--radius-md); cursor: pointer;
+  font-size: 13px; color: var(--text-secondary);
+  transition: var(--transition); user-select: none;
+}
+.repo-expand-btn:hover {
+  background: var(--bg-hover); border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.expand-icon { font-size: 10px; transition: transform 0.2s; }
+
 /* 搜索统计栏 */
 .search-stats {
   display: flex; gap: 16px; padding: 14px 16px;

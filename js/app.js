@@ -431,7 +431,7 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
   if (searchTerms.length >= 2) ghQueries.push(searchTerms.slice(0, 2).join(' '));
   ghQueries.push(searchTerms[0]);
 
-  // 百度使用中文原词搜索
+  // 中文关键词（用于Bing中文搜索）
   const baiduQuery = extractChineseKeywords(originalDesc);
 
   const channels = [
@@ -442,19 +442,18 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
       }
       return { items: [], total_count: 0 };
     }},
-    // JSON API 渠道优先（通过 allorigins 代理，成功率更高）
+    // JSON API 渠道（通过 cors.sh/cors.eu.org 代理）
     { id: 'wikipedia', name: 'Wikipedia', icon: '📚', searchFn: () => searchWikipedia(searchQuery) },
     { id: 'duckduckgo', name: 'DuckDuckGo', icon: '🦆', searchFn: () => searchDuckDuckGo(searchQuery) },
-    // HTML 搜索渠道
-    { id: 'baidu', name: '百度', icon: '🔎', searchFn: () => searchBaidu(baiduQuery) },
+    // HTML 搜索渠道（通过 CORS 代理）
     { id: 'bing', name: 'Bing', icon: '🔍', searchFn: () => searchBing(searchQuery) },
+    { id: 'bingcn', name: 'Bing中文', icon: '🇨🇳', searchFn: () => searchBingCN(baiduQuery) },
     { id: 'devpost', name: 'Devpost', icon: '🏆', searchFn: () => searchDevpost(searchQuery) },
     { id: 'producthunt', name: 'ProductHunt', icon: '🚀', searchFn: () => searchProductHunt(searchQuery) },
-    { id: 'watcha', name: 'Watcha', icon: '🇨🇳', searchFn: () => searchWatcha(baiduQuery) },
   ];
 
-  // 并行搜索所有渠道（代理渠道通过信号量串行化，避免 allorigins.win 限流）
-  const proxyChannelIds = ['wikipedia', 'duckduckgo', 'baidu', 'bing', 'devpost', 'producthunt', 'watcha'];
+  // 并行搜索所有渠道（代理渠道通过信号量串行化，避免代理限流）
+  const proxyChannelIds = ['wikipedia', 'duckduckgo', 'bing', 'bingcn', 'devpost', 'producthunt'];
   const results = await Promise.allSettled(
     channels.map(async ch => {
       try {
@@ -637,6 +636,54 @@ async function searchBing(searchQuery) {
   }
 
   if (results.length === 0) throw new Error('Bing: no results parsed');
+  return { items: results, total_count: results.length };
+}
+
+// Bing中文搜索（使用中文关键词，替代无法通过代理的百度）
+async function searchBingCN(chineseQuery) {
+  if (!chineseQuery || chineseQuery.length < 2) throw new Error('BingCN: no Chinese query');
+
+  const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(chineseQuery)}&count=10&setlang=zh-CN&cc=CN`;
+
+  let text = '';
+  try {
+    text = await fetchViaProxy(targetUrl);
+  } catch(e) {
+    console.warn('BingCN proxy failed:', e.message);
+    throw new Error('Bing中文搜索失败');
+  }
+
+  if (!text || text.length < 500) throw new Error('BingCN: empty response');
+
+  const results = [];
+  const lines = text.split('\n');
+  const seen = new Set();
+
+  for (let i = 0; i < lines.length && results.length < 8; i++) {
+    const line = lines[i];
+    const headingMatch = line.match(/^#{2,3}\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
+    if (headingMatch) {
+      const title = headingMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
+      const url = headingMatch[2];
+      if (seen.has(url)) continue;
+      seen.add(url);
+
+      let desc = '';
+      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+        const nextLine = lines[j].trim();
+        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') && nextLine.length > 15) {
+          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+          break;
+        }
+      }
+
+      if (title && title.length > 2 && !desc.startsWith('Sponsored')) {
+        results.push({ name: title, description: desc, url: url, stars: '🔍' });
+      }
+    }
+  }
+
+  if (results.length === 0) throw new Error('BingCN: no results parsed');
   return { items: results, total_count: results.length };
 }
 
@@ -1072,11 +1119,12 @@ function renderChannelContent(channel, allTerms) {
   statsHTML += `<div class="stat-item"><span class="stat-num">${hitRatio}%</span><span class="stat-label">命中百分比</span></div>`;
   statsHTML += `</div>`;
 
-  const reposHTML = repos.map(repo => {
+  const reposHTML = repos.map((repo, idx) => {
     const repoText = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
+    const hidden = idx >= 3 ? 'style="display:none;"' : '';
     return `
-    <div class="repo-card ${isHit ? 'hit' : 'miss'}">
+    <div class="repo-card ${isHit ? 'hit' : 'miss'} repo-item-${idx >= 3 ? 'extra' : 'visible'}" ${hidden}>
       <div class="repo-header">
         <a href="${repo.url || repo.html_url || '#'}" target="_blank" class="repo-name">${repo.name || repo.full_name}</a>
         <span class="repo-stars">${repo.stars || (repo.stargazers_count ? '⭐ ' + repo.stargazers_count : '')}</span>
@@ -1091,7 +1139,28 @@ function renderChannelContent(channel, allTerms) {
   `;
   }).join('');
 
-  $('#channelContent').innerHTML = statsHTML + reposHTML;
+  // 超过3条结果时添加展开/折叠按钮
+  const expandBtn = repos.length > 3
+    ? `<div class="repo-expand-btn" id="repoExpandBtn" onclick="toggleRepoExpand()">
+         <span class="expand-text">展开剩余 ${repos.length - 3} 条结果</span>
+         <span class="expand-icon">▼</span>
+       </div>`
+    : '';
+
+  $('#channelContent').innerHTML = statsHTML + reposHTML + expandBtn;
+}
+
+// 展开/折叠搜索结果
+function toggleRepoExpand() {
+  const extras = document.querySelectorAll('.repo-item-extra');
+  const btn = $('#repoExpandBtn');
+  const text = btn?.querySelector('.expand-text');
+  const icon = btn?.querySelector('.expand-icon');
+  const isHidden = extras.length > 0 && extras[0].style.display === 'none';
+
+  extras.forEach(el => { el.style.display = isHidden ? '' : 'none'; });
+  if (text) text.textContent = isHidden ? '折叠结果' : `展开剩余 ${extras.length} 条结果`;
+  if (icon) icon.textContent = isHidden ? '▲' : '▼';
 }
 
 // 调用 MyMemory 翻译API（免费、CORS支持、无需API Key）
