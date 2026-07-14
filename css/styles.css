@@ -70,8 +70,18 @@ body {
 .logo-text { display: flex; flex-direction: column; line-height: 1.2; }
 .logo-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
 .logo-subtitle { font-size: 11px; color: var(--text-muted); }
-.header-right { display: flex; gap: 8px; }
+.header-right { display: flex; gap: 8px; align-items: center; }
 .header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+/* Language switch button */
+#langSwitchBtn {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 36px;
+  justify-content: center;
+  letter-spacing: 0.5px;
+}
 
 /* ============================================
    Buttons

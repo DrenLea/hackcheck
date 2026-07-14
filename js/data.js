@@ -903,30 +903,30 @@ const PITCH_DATA = {
 // ============================================
 const MODULE_SUBMODULES = {
   topic: [
-    { id: 'description',  label: '项目描述',   icon: '📝' },
-    { id: 'search',       label: '搜索结果',   icon: '🔍' },
-    { id: 'analysis',     label: '稀缺度分析', icon: '📊' },
+    { id: 'description',  label: '项目描述',   labelKey: 'sub.topic.desc',     icon: '📝' },
+    { id: 'search',       label: '搜索结果',   labelKey: 'sub.topic.search',   icon: '🔍' },
+    { id: 'analysis',     label: '稀缺度分析', labelKey: 'sub.topic.analysis', icon: '📊' },
   ],
   tech: [
-    { id: 'config',       label: '团队配置',   icon: '⚙️' },
-    { id: 'presets',      label: '预设方案',   icon: '💡' },
-    { id: 'manual',       label: '手动选型',   icon: '🔧' },
-    { id: 'results',      label: '评估结果',   icon: '📈' },
-    { id: 'division',     label: '团队分工',   icon: '👥' },
-    { id: 'timeline',     label: '开发时间线', icon: '📅' },
+    { id: 'config',       label: '团队配置',   labelKey: 'sub.tech.config',   icon: '⚙️' },
+    { id: 'presets',      label: '预设方案',   labelKey: 'sub.tech.presets',  icon: '💡' },
+    { id: 'manual',       label: '手动选型',   labelKey: 'sub.tech.manual',   icon: '🔧' },
+    { id: 'results',      label: '评估结果',   labelKey: 'sub.tech.result',   icon: '📈' },
+    { id: 'division',     label: '团队分工',   labelKey: 'sub.tech.roles',    icon: '👥' },
+    { id: 'timeline',     label: '开发时间线', labelKey: 'sub.tech.timeline', icon: '📅' },
   ],
   dev: [
-    { id: 'upload',       label: '文件上传',   icon: '📂' },
-    { id: 'results',      label: '扫描结果',   icon: '🔒' },
+    { id: 'upload',       label: '文件上传',   labelKey: 'sub.dev.upload', icon: '📂' },
+    { id: 'results',      label: '扫描结果',   labelKey: 'sub.dev.scan',   icon: '🔒' },
   ],
   demo: [
-    { id: 'git',          label: 'Git教程',    icon: '📦' },
-    { id: 'detect',       label: '项目检测',   icon: '🔎' },
-    { id: 'deploy',       label: '部署方案',   icon: '🚀' },
+    { id: 'git',          label: 'Git教程',    labelKey: 'sub.demo.git',    icon: '📦' },
+    { id: 'detect',       label: '项目检测',   labelKey: 'sub.demo.detect', icon: '🔎' },
+    { id: 'deploy',       label: '部署方案',   labelKey: 'sub.demo.deploy', icon: '🚀' },
   ],
   pitch: [
-    { id: 'info',         label: '项目信息',   icon: '📝' },
-    { id: 'pitch',        label: 'Pitch演讲稿',icon: '🎤' },
-    { id: 'review',       label: '模拟评审',   icon: '🎯' },
+    { id: 'info',         label: '项目信息',    labelKey: 'sub.pitch.info',  icon: '📝' },
+    { id: 'pitch',        label: 'Pitch演讲稿', labelKey: 'sub.pitch.pitch', icon: '🎤' },
+    { id: 'review',       label: '模拟评审',    labelKey: 'sub.pitch.review',icon: '🎯' },
   ],
 };

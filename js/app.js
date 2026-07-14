@@ -132,7 +132,7 @@ function renderSubmodules() {
     container.innerHTML = subs.map(sub => `
       <button class="nav-sub-item" data-module="${moduleId}" data-submodule="${sub.id}">
         <span>${sub.icon}</span>
-        <span>${sub.label}</span>
+        <span>${sub.labelKey ? t(sub.labelKey) : sub.label}</span>
       </button>
     `).join('');
 
@@ -151,7 +151,7 @@ function renderSubmodules() {
       ${subs.map(sub => `
         <button class="nav-sub-item" data-module="${moduleId}" data-submodule="${sub.id}">
           <span>${sub.icon}</span>
-          <span>${sub.label}</span>
+          <span>${sub.labelKey ? t(sub.labelKey) : sub.label}</span>
         </button>
       `).join('')}
     `;
@@ -164,6 +164,59 @@ function renderSubmodules() {
       switchSubmodule(item.dataset.module, item.dataset.submodule);
     });
   });
+}
+
+// 语言切换后更新动态渲染的导航标签
+function updateNavLabels() {
+  Object.entries(MODULE_SUBMODULES).forEach(([moduleId, subs]) => {
+    // 更新展开模式的子项标签
+    const container = $(`#navChildren-${moduleId}`);
+    if (container) {
+      const items = container.querySelectorAll('.nav-sub-item');
+      items.forEach((item, idx) => {
+        const labelEl = item.querySelectorAll('span')[1];
+        if (labelEl && subs[idx] && subs[idx].labelKey) {
+          labelEl.textContent = t(subs[idx].labelKey);
+        }
+      });
+    }
+    // 更新 flyout 面板标签
+    const group = container?.closest('.nav-group');
+    const flyout = group?.querySelector('.nav-flyout');
+    if (flyout) {
+      const flyoutTitle = flyout.querySelector('.nav-flyout-title');
+      const navTitleEl = group?.querySelector('.nav-title');
+      if (flyoutTitle && navTitleEl) flyoutTitle.textContent = navTitleEl.textContent;
+      const flyoutItems = flyout.querySelectorAll('.nav-sub-item');
+      flyoutItems.forEach((item, idx) => {
+        const labelEl = item.querySelectorAll('span')[1];
+        if (labelEl && subs[idx] && subs[idx].labelKey) {
+          labelEl.textContent = t(subs[idx].labelKey);
+        }
+      });
+    }
+  });
+  // 更新字数统计
+  const ta = $('#projectDescription');
+  if (ta) {
+    $('#charCount').innerHTML = `${ta.value.length} <span>${t('topic.charCount')}</span>`;
+  }
+  // 重新渲染动态内容（如果已有数据）
+  try {
+    if (AppState.topic.analyzed) {
+      const analysis = analyzeTopic(AppState.topic.description, extractKeywords(AppState.topic.description));
+      renderTopicResults(analysis, extractKeywords(AppState.topic.description));
+    }
+  } catch(e) { console.warn('i18n re-render topic failed:', e.message); }
+  try {
+    if (AppState.tech.selected.length > 0) evaluateTechStack();
+  } catch(e) { console.warn('i18n re-render tech failed:', e.message); }
+  try {
+    if (AppState.dev.scanned) renderScanResults();
+  } catch(e) { console.warn('i18n re-render scan failed:', e.message); }
+  try {
+    if (AppState.pitch.review.autoReviewed) calculateReviewScore();
+  } catch(e) { console.warn('i18n re-render review failed:', e.message); }
 }
 
 // 切换子项：只显示对应区块，隐藏其他
@@ -196,12 +249,12 @@ function switchSubmodule(moduleId, subId) {
 function initTopicModule() {
   const ta = $('#projectDescription');
   ta.addEventListener('input', () => {
-    $('#charCount').textContent = `${ta.value.length} 字`;
+    $('#charCount').textContent = `${ta.value.length} ${t('topic.charCount')}`;
     AppState.topic.description = ta.value;
   });
 
   if (AppState.topic.description) ta.value = AppState.topic.description;
-  $('#charCount').textContent = `${ta.value.length} 字`;
+  $('#charCount').textContent = `${ta.value.length} ${t('topic.charCount')}`;
 
   $('#searchBtn').addEventListener('click', handleTopicSearch);
 }
@@ -209,7 +262,7 @@ function initTopicModule() {
 async function handleTopicSearch() {
   const desc = $('#projectDescription').value.trim();
   if (!desc || desc.length < 10) {
-    showToast('请输入至少10个字的项目描述', 'warning');
+    showToast(t('topic.warn.minLength'), 'warning');
     return;
   }
 
@@ -221,7 +274,7 @@ async function handleTopicSearch() {
   $('#topicResults').style.display = 'none';
 
   // 简洁的加载提示
-  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>正在多渠道搜索相似项目...</span></div>';
+  $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>' + t('topic.loading') + '</span></div>';
 
   // 1. 后台翻译（不向用户展示翻译过程）
   let translatedText = '';
@@ -288,7 +341,7 @@ async function handleTopicSearch() {
   $('#searchStatus').style.display = 'none';
   // 搜索完成后停留在搜索结果子页
   switchSubmodule('topic', 'search');
-  showToast('搜索完成！点击「稀缺度分析」查看详细评分', 'success');
+  showToast(t('topic.success'), 'success');
 }
 
 // 从中文描述中提取关键词（用于百度搜索）
@@ -1063,7 +1116,7 @@ function renderMultiChannelResults(channelResults, keywordGroups) {
         <div class="channel-stat-icon">${ch.icon}</div>
         <div class="channel-stat-name">${ch.name}</div>
         <div class="channel-stat-num">${stats.totalCount}</div>
-        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} 命中 · ${hitPct}%` : (ch.error ? '网络受限' : '无结果')}</div>
+        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} 命中 · ${hitPct}%` : (ch.error ? t('search.networkLimited') : t('search.noResults'))}</div>
       </div>
     `;
   }).join('');
@@ -1123,7 +1176,7 @@ function renderChannelContent(channel, allTerms) {
     const repoText = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
     const hidden = idx >= 3 ? 'style="display:none;"' : '';
-    const desc = repo.description || '暂无描述';
+    const desc = repo.description || t('search.noDesc');
     // 描述超过3行（约120字符）时折叠
     const isLongDesc = desc.length > 120;
     return `
@@ -1133,7 +1186,7 @@ function renderChannelContent(channel, allTerms) {
         <span class="repo-stars">${repo.stars || (repo.stargazers_count ? '⭐ ' + repo.stargazers_count : '')}</span>
       </div>
       <p class="repo-desc ${isLongDesc ? 'collapsed' : ''}" ${isLongDesc ? `onclick="toggleDescExpand(this)"` : ''}>${desc}</p>
-      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">展开 ▼</span>' : ''}
+      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">' + t('search.expand') + '</span>' : ''}
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
         ${repo.updated_at ? `<span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>` : ''}
@@ -1146,7 +1199,7 @@ function renderChannelContent(channel, allTerms) {
   // 超过3条结果时添加展开/折叠按钮
   const expandBtn = repos.length > 3
     ? `<div class="repo-expand-btn" id="repoExpandBtn" onclick="toggleRepoExpand()">
-         <span class="expand-text">展开剩余 ${repos.length - 3} 条结果</span>
+         <span class="expand-text">${t('search.expandRemaining')} ${repos.length - 3} ${t('search.results')}</span>
          <span class="expand-icon">▼</span>
        </div>`
     : '';
@@ -1163,7 +1216,7 @@ function toggleRepoExpand() {
   const isHidden = extras.length > 0 && extras[0].style.display === 'none';
 
   extras.forEach(el => { el.style.display = isHidden ? '' : 'none'; });
-  if (text) text.textContent = isHidden ? '折叠结果' : `展开剩余 ${extras.length} 条结果`;
+  if (text) text.textContent = isHidden ? t('search.collapseAll') : `${t('search.expandRemaining')} ${extras.length} ${t('search.results')}`;
   if (icon) icon.textContent = isHidden ? '▲' : '▼';
 }
 
@@ -1177,7 +1230,7 @@ function toggleDescExpand(el) {
 
   const isCollapsed = desc.classList.contains('collapsed');
   desc.classList.toggle('collapsed');
-  if (toggle) toggle.textContent = isCollapsed ? '折叠 ▲' : '展开 ▼';
+  if (toggle) toggle.textContent = isCollapsed ? t('search.collapse') : t('search.expand');
 }
 
 // 调用 MyMemory 翻译API（免费、CORS支持、无需API Key）
@@ -1388,7 +1441,7 @@ function renderGithubResults(repos, searchStats) {
     const repoText = ((repo.name || '') + ' ' + (repo.description || '')).toLowerCase();
     const allTerms = (searchStats.allTerms || []);
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
-    const desc = repo.description || '暂无描述';
+    const desc = repo.description || t('search.noDesc');
     const isLongDesc = desc.length > 120;
     return `
     <div class="repo-card ${isHit ? 'hit' : 'miss'}">
@@ -1397,7 +1450,7 @@ function renderGithubResults(repos, searchStats) {
         <span class="repo-stars">⭐ ${repo.stargazers_count}</span>
       </div>
       <p class="repo-desc ${isLongDesc ? 'collapsed' : ''}" ${isLongDesc ? `onclick="toggleDescExpand(this)"` : ''}>${desc}</p>
-      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">展开 ▼</span>' : ''}
+      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">' + t('search.expand') + '</span>' : ''}
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
         <span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>
@@ -1992,11 +2045,11 @@ async function handleFiles(fileList) {
   });
 
   if (filteredFiles.length === 0) {
-    showToast('未找到可扫描的文件，请上传包含 .js .ts .py .env .gitignore 等文件的项目文件夹', 'warning');
+    showToast(t('toast.noFiles'), 'warning');
     return;
   }
 
-  showToast(`正在扫描 ${filteredFiles.length} 个文件...`, 'info');
+  showToast(`${t('toast.scanning')} ${filteredFiles.length} ${t('toast.files')}`, 'info');
 
   const readPromises = filteredFiles.map(f => new Promise(resolve => {
     const reader = new FileReader();
@@ -2173,7 +2226,7 @@ function scanFiles() {
   saveState();
 
   const totalIssues = findings.secrets.length + findings.sensitive.length + (findings.gitignore.exists ? findings.gitignore.missingCritical.length + findings.gitignore.missingImportant.length : 1) + findings.quality.length;
-  showToast(`扫描完成！发现 ${totalIssues} 个问题`, totalIssues > 0 ? 'warning' : 'success');
+  showToast(`${t('toast.scanDone')} ${totalIssues} ${t('toast.issues')}`, totalIssues > 0 ? 'warning' : 'success');
 }
 
 function renderScanResults() {
@@ -2607,7 +2660,7 @@ function generatePitch() {
   const desc = $('#pitchDescription').value.trim();
 
   if (!name || !oneLiner) {
-    showToast('请填写项目名称和一句话描述', 'warning');
+    showToast(t('pitch.warn.empty'), 'warning');
     return;
   }
 
@@ -2655,7 +2708,7 @@ function generatePitch() {
   AppState.pitch.pitchContent = pitchText;
   saveState();
 
-  showToast('Pitch 演讲稿已生成！', 'success');
+  showToast(t('pitch.success.generated'), 'success');
 }
 
 // 从用户描述中解析项目信息
@@ -2880,11 +2933,11 @@ function generatePitchSections(ctx, info) {
 
 function exportPitch() {
   if (!AppState.pitch.pitchContent) {
-    showToast('请先生成 Pitch', 'warning');
+    showToast(t('pitch.warn.noPitch'), 'warning');
     return;
   }
   navigator.clipboard.writeText(AppState.pitch.pitchContent).then(() => {
-    showToast('Pitch 已复制到剪贴板！', 'success');
+    showToast(t('pitch.success.copied'), 'success');
   });
 }
 
@@ -2988,7 +3041,7 @@ function autoReview() {
   calculateReviewScore();
 
   saveState();
-  showToast('5位AI评审员已完成模拟评审！查看下方详细反馈', 'success');
+  showToast(t('pitch.success.reviewed'), 'success');
 }
 
 // 根据项目信息评估单个评审标准
@@ -3245,7 +3298,7 @@ function calculateReviewScore() {
   const hasRatings = Object.keys(ratings).length > 0;
 
   if (!hasRatings) {
-    showToast('请先完成评审打分', 'warning');
+    showToast(t('pitch.warn.noReview'), 'warning');
     return;
   }
 
@@ -3266,7 +3319,7 @@ function calculateReviewScore() {
   });
 
   if (agentScores.length === 0) {
-    showToast('请先完成评审打分', 'warning');
+    showToast(t('pitch.warn.noReview'), 'warning');
     return;
   }
 
@@ -3300,7 +3353,7 @@ function calculateReviewScore() {
 
   updateOverallScore();
   saveState();
-  showToast(`评审完成！综合得分: ${avgScore}`, 'success');
+  showToast(`${t('pitch.success.scored')} ${avgScore}`, 'success');
 
   $('#reviewResults').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -3514,14 +3567,14 @@ function exportReport() {
   a.download = `hackcheck-report-${Date.now()}.txt`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('报告已导出！', 'success');
+  showToast(t('report.exported'), 'success');
 }
 
 // ============================================
 // 重置
 // ============================================
 function resetAll() {
-  if (!confirm('确定要重置所有数据吗？此操作不可撤销。')) return;
+  if (!confirm(t('app.resetConfirm'))) return;
 
   localStorage.removeItem('hackcheck_v2');
   AppState.topic = { description: '', score: 0, analyzed: false, githubResults: [], multiScores: {} };
@@ -3537,6 +3590,7 @@ function resetAll() {
 // 初始化
 // ============================================
 function init() {
+  initI18n();
   loadState();
   initNavigation();
   // 激活 loadState 恢复的模块（HTML 默认 active 是 topic，需要同步到实际 currentModule）
@@ -3562,7 +3616,7 @@ function init() {
   try {
     if (AppState.topic.analyzed) {
       $('#projectDescription').value = AppState.topic.description;
-      $('#charCount').textContent = `${AppState.topic.description.length} 字`;
+      $('#charCount').textContent = `${AppState.topic.description.length} ${t('topic.charCount')}`;
       if (AppState.topic.githubResults.length > 0) renderGithubResults(AppState.topic.githubResults);
       const analysis = analyzeTopic(AppState.topic.description, extractKeywords(AppState.topic.description));
       renderTopicResults(analysis, extractKeywords(AppState.topic.description));
