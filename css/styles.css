@@ -73,34 +73,6 @@ body {
 .header-right { display: flex; gap: 12px; align-items: center; }
 .header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
-/* Header progress bar */
-.header-progress {
-  display: flex; align-items: center; gap: 8px;
-  padding: 0 4px;
-}
-.header-progress-track {
-  width: 120px; height: 6px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 3px; overflow: hidden;
-  position: relative;
-}
-.header-progress-fill {
-  height: 100%; width: 0%;
-  background: linear-gradient(90deg, var(--accent-primary), #00d488);
-  border-radius: 3px;
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 0 8px rgba(0,255,163,0.4);
-}
-.header-progress-text {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px; font-weight: 600;
-  color: var(--text-secondary);
-  min-width: 32px;
-}
-.header-progress-fill[style*="width: 100%"] {
-  box-shadow: 0 0 12px rgba(0,255,163,0.6);
-}
-
 /* Language switch button */
 #langSwitchBtn {
   font-family: 'JetBrains Mono', monospace;
@@ -144,6 +116,10 @@ body {
 /* ============================================
    Sidebar
    ============================================ */
+.sidebar-wrap {
+  display: flex; flex-shrink: 0;
+  position: sticky; top: 64px; height: calc(100vh - 64px);
+}
 .sidebar {
   width: 260px; flex-shrink: 0;
   background: rgba(17,24,39,0.5);
@@ -151,7 +127,31 @@ body {
   border-right: 1px solid var(--border);
   padding: 16px 12px;
   display: flex; flex-direction: column; gap: 16px;
-  position: sticky; top: 64px; height: calc(100vh - 64px); overflow-y: auto;
+  overflow-y: auto;
+}
+
+/* 竖向进度条 */
+.side-progress {
+  width: 3px; flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+  position: relative; overflow: hidden;
+}
+.side-progress-track {
+  position: absolute; inset: 0;
+}
+.side-progress-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 0%;
+  background: linear-gradient(0deg, var(--accent-primary), #00d488, rgba(0,255,163,0.6));
+  transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px rgba(0,255,163,0.5), 0 0 4px rgba(0,255,163,0.8);
+}
+.side-progress-fill::after {
+  content: ''; position: absolute; top: 0; left: -2px; right: -2px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  box-shadow: 0 0 12px rgba(0,255,163,0.9), 0 0 6px rgba(0,255,163,1);
 }
 .sidebar-section { display: flex; flex-direction: column; gap: 4px; }
 .sidebar-label {
@@ -1153,7 +1153,7 @@ body {
   .cost-pros-cons { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-  .sidebar { display: none; }
+  .sidebar-wrap { display: none; }
   .main-content { padding: 16px; }
   .module-header { flex-direction: column; }
   .tech-config { grid-template-columns: 1fr; }

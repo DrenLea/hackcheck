@@ -3533,11 +3533,9 @@ function updateOverallScore() {
   const circumference = 2 * Math.PI * 34;
   progress.style.strokeDashoffset = circumference * (1 - avg / 100);
 
-  // 更新顶部进度条
-  const fill = $('#headerProgressFill');
-  const text = $('#headerProgressText');
-  if (fill) fill.style.width = avg + '%';
-  if (text) text.textContent = avg + '%';
+  // 更新竖向进度条
+  const fill = $('#sideProgressFill');
+  if (fill) fill.style.height = avg + '%';
 }
 
 // ============================================

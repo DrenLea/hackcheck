@@ -36,12 +36,6 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="header-progress" id="headerProgress">
-        <div class="header-progress-track">
-          <div class="header-progress-fill" id="headerProgressFill"></div>
-        </div>
-        <span class="header-progress-text" id="headerProgressText">0%</span>
-      </div>
       <button class="btn btn-ghost" id="langSwitchBtn" onclick="toggleLang()" data-i18n-title="lang.switchTitle">EN</button>
       <button class="btn btn-ghost" id="resetBtn" data-i18n-title="app.reset">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -54,8 +48,9 @@
 
   <!-- 主体布局 -->
   <div class="layout">
-    <!-- 侧边导航 -->
-    <nav class="sidebar" id="sidebar">
+    <!-- 侧边导航 + 竖向进度条 -->
+    <div class="sidebar-wrap">
+      <nav class="sidebar" id="sidebar">
       <div class="sidebar-section">
         <div class="sidebar-label" data-i18n="nav.workflow">开发流程</div>
 
@@ -154,6 +149,13 @@
         </div>
       </div>
     </nav>
+      <!-- 竖向进度条：与侧边栏等高 -->
+      <div class="side-progress" id="sideProgress">
+        <div class="side-progress-track">
+          <div class="side-progress-fill" id="sideProgressFill"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- 主内容区 -->
     <main class="main-content">
