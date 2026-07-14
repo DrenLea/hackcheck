@@ -78,6 +78,8 @@ const I18N = {
   'search.results': { zh: '条结果', en: 'results' },
   'search.networkLimited': { zh: '网络受限', en: 'Limited' },
   'search.noResults': { zh: '无结果', en: 'No results' },
+  'search.hitShort': { zh: '命中', en: 'Hit' },
+  'search.githubTotal': { zh: 'GitHub总结果', en: 'GitHub Total' },
 
   // 分析结果
   'analysis.searchScarcity': { zh: '📈 搜索稀缺度分析', en: '📈 Search Scarcity Analysis' },
@@ -108,6 +110,9 @@ const I18N = {
   'scarcity.high': { zh: '个相关仓库，方向较常见', en: 'related repos found, common direction' },
   'scarcity.veryHigh': { zh: '个相关仓库，方向非常常见', en: 'related repos found, very common direction' },
   'scarcity.over': { zh: '找到超过', en: 'Found over' },
+  'scarcity.found': { zh: '找到', en: 'Found' },
+  'scarcity.diffSpace': { zh: '；命中百分比仅', en: '; Hit rate only' },
+  'scarcity.diffSpaceDesc': { zh: '%，说明大部分搜索结果与你的项目不直接相关，有差异化空间', en: '%, meaning most results are not directly related, leaving room for differentiation' },
 
   // 社媒需求
   'socialDemand.title': { zh: '社媒需求发现', en: 'Social Demand Discovery' },
@@ -184,6 +189,7 @@ const I18N = {
   'eval.poor': { zh: '不佳', en: 'Poor' },
   'eval.avgFit': { zh: '平均适配:', en: 'Avg fit:' },
   'eval.techsSelected': { zh: '项技术已选', en: 'technologies selected' },
+  'eval.points': { zh: '分', en: 'pts' },
 
   // 成本分析
   'cost.title': { zh: '💰 成本分析', en: '💰 Cost Analysis' },
@@ -328,6 +334,47 @@ const I18N = {
   'pitch.scoreAdjusted': { zh: '评分已调整', en: 'Score adjusted' },
   'pitch.aiScore': { zh: 'AI评分:', en: 'AI Score:' },
 
+  // AI 评审反馈
+  'review.originality.high': { zh: '✅ 稀缺度评分{score}分，项目方向非常新颖！GitHub上同类项目极少，有巨大差异化优势。', en: '✅ Scarcity score {score}/100, highly novel direction! Very few similar projects on GitHub, huge differentiation advantage.' },
+  'review.originality.mid': { zh: '稀缺度评分{score}分，方向有一定竞争。需要在功能或体验上找到独特切入点。', en: 'Scarcity score {score}/100, moderate competition. Need to find a unique angle in features or experience.' },
+  'review.originality.low': { zh: '⚠️ 稀缺度评分仅{score}分，方向较常见。强烈建议参考选题评审中的差异化策略。', en: '⚠️ Scarcity score only {score}/100, common direction. Strongly recommend following the differentiation strategies from Topic Review.' },
+  'review.originality.none': { zh: '建议先完成选题评审模块，获取稀缺度评分和差异化建议。', en: 'Recommend completing the Topic Review module first for scarcity scoring and differentiation advice.' },
+  'review.innovation.rich': { zh: '检测到{count}个核心功能，建议在Pitch中突出最独特的1-2个功能作为差异化亮点。', en: 'Detected {count} core features. Recommend highlighting the 1-2 most unique features in your pitch.' },
+  'review.innovation.poor': { zh: '建议明确项目的核心差异化功能，在演示中重点展示。', en: 'Recommend clarifying your core differentiating features and showcasing them in the demo.' },
+  'review.social.strong': { zh: '✅ 项目具有显著的社会价值，面向弱势群体或社会问题，评委会非常认可。', en: '✅ Project has significant social value, targeting vulnerable groups or social issues. Judges will highly appreciate this.' },
+  'review.social.week': { zh: '建议思考项目的社会价值，黑客松评委通常偏好有社会意义的项目。', en: 'Consider your project\'s social value. Hackathon judges typically prefer projects with social impact.' },
+  'review.impact.high': { zh: '这个方向在GitHub上同类项目极少（稀缺度评分 {score}/100），有很大的<strong>先发优势和社会价值</strong>。', en: 'This direction has very few similar projects on GitHub (scarcity score {score}/100), offering significant <strong>first-mover advantage and social value</strong>.' },
+  'review.impact.mid': { zh: '虽然市场上已有同类产品，但 {name} 通过差异化功能切入，有望服务到<strong>被现有方案忽略的用户群体</strong>。', en: 'While similar products exist, {name} enters through differentiated features and can serve <strong>users overlooked by existing solutions</strong>.' },
+  'review.tip.diff': { zh: '突出与竞品的差异化', en: 'Highlight differentiation from competitors' },
+  'review.tip.focus': { zh: '强调核心创新点，不要泛泛而谈', en: 'Emphasize core innovations, avoid being vague' },
+  'review.tip.data': { zh: '用量化数据增强说服力', en: 'Use quantitative data to strengthen persuasiveness' },
+  'review.tip.social': { zh: '强调社会价值而非仅商业价值', en: 'Emphasize social value, not just commercial value' },
+  'review.ai.multi': { zh: '使用了{count}种AI能力（{names}），建议展示AI能力的深度整合而非简单调用。', en: 'Uses {count} AI capabilities ({names}). Recommend showing deep integration rather than simple API calls.' },
+  'review.ai.single': { zh: '使用了{name}，建议不要仅做API套壳，要结合业务场景做定制化Prompt和后处理。', en: 'Uses {name}. Avoid being just an API wrapper; customize prompts and post-processing for your use case.' },
+  'review.ai.mentioned': { zh: '项目提到AI但技术栈中未包含AI API。建议明确AI能力如何融入产品。', en: 'Project mentions AI but no AI API in tech stack. Clarify how AI integrates into the product.' },
+  'review.ai.none': { zh: '项目未使用AI能力。如果不需要AI也可以，但如果加入AI可以提升竞争力。', en: 'Project doesn\'t use AI. Fine if not needed, but adding AI could boost competitiveness.' },
+  'review.problem.good': { zh: '项目描述详细，问题与解决方案匹配度较高。建议在Pitch中清晰展示"问题→方案"的逻辑链。', en: 'Detailed description with good problem-solution fit. Show a clear "problem→solution" logic chain in your pitch.' },
+  'review.problem.weak': { zh: '建议更详细地描述问题场景，确保解决方案与问题高度匹配。', en: 'Describe the problem scenario in more detail. Ensure solution closely matches the problem.' },
+  'review.scalability': { zh: '建议思考项目的可扩展方向：能否支持更多用户？能否扩展到其他场景？', en: 'Consider scalability: Can it support more users? Can it extend to other scenarios?' },
+  'review.techcombo.rich': { zh: '技术栈丰富（{count}项），组合有创意。注意确保{duration}小时内能完成。', en: 'Rich tech stack ({count} items), creative combination. Ensure it can be completed within {duration} hours.' },
+  'review.techcombo.mid': { zh: '技术栈适中。考虑是否需要加入数据库、缓存等提升完成度。', en: 'Moderate tech stack. Consider adding database, caching, etc. to improve completeness.' },
+  'review.techcombo.minimal': { zh: '技术栈较少，可能是优点（聚焦）也可能是缺点（功能不足），需结合项目目标判断。', en: 'Minimal tech stack. Could be a pro (focus) or con (insufficient features). Judge based on project goals.' },
+  'review.userinsight.good': { zh: '对目标用户"{users}"有较好的理解。建议在Pitch中用具体用户故事展示痛点。', en: 'Good understanding of target users "{users}". Use specific user stories to show pain points in your pitch.' },
+  'review.userinsight.weak': { zh: '建议深入研究目标用户的真实痛点，用用户访谈或数据支撑。', en: 'Research target users\' real pain points more deeply. Support with user interviews or data.' },
+  'review.complexity.high': { zh: '技术栈复杂度高（{count}项），注意确保{duration}小时内能完成核心功能。', en: 'High tech complexity ({count} items). Ensure core features can be completed within {duration} hours.' },
+  'review.complexity.mid': { zh: '技术复杂度适中，有足够的深度展示技术能力。', en: 'Moderate tech complexity, sufficient depth to showcase technical skills.' },
+  'review.complexity.low': { zh: '技术实现相对简单，建议增加一些有难度的技术点提升竞争力。', en: 'Relatively simple implementation. Consider adding challenging technical points to boost competitiveness.' },
+  'review.completeness.good': { zh: '已检测项目类型并准备部署，完成度较高。建议确保核心功能端到端可用。', en: 'Project type detected and ready for deployment, high completeness. Ensure core features work end-to-end.' },
+  'review.completeness.mid': { zh: '建议尽早完成核心功能并部署，确保Demo时有可演示的成品。', en: 'Recommend completing core features and deploying early. Ensure a demonstrable product for the demo.' },
+  'review.completeness.low': { zh: '完成度较低，建议优先实现最小可行产品（MVP）。', en: 'Low completeness. Prioritize implementing an MVP (Minimum Viable Product).' },
+  'review.ux.good': { zh: '项目包含前端技术，有界面展示能力。建议注重关键页面的交互体验。', en: 'Project includes frontend tech with UI capabilities. Focus on interaction experience for key pages.' },
+  'review.ux.mid': { zh: '建议设计简洁直观的界面，重点展示核心功能的交互流程。', en: 'Design a clean, intuitive UI. Focus on showcasing the core feature interaction flow.' },
+  'review.ux.low': { zh: '项目缺少前端技术，建议至少准备简单的展示页面。', en: 'Project lacks frontend tech. Recommend preparing at least a simple demo page.' },
+  'review.presentation.clear': { zh: '项目信息完整，便于生成清晰的Pitch。建议按"问题-方案-技术-Demo-价值"结构组织。', en: 'Complete project info, easy to generate a clear pitch. Organize as "problem-solution-tech-demo-value".' },
+  'review.presentation.weak': { zh: '建议完善项目信息（名称、描述、技术栈），有助于生成更好的Pitch。', en: 'Improve project info (name, description, tech stack) for a better pitch.' },
+  'review.presentation.timeline': { zh: '建议准备时间线，展示{duration}小时内的开发计划。', en: 'Prepare a timeline showing your development plan for {duration} hours.' },
+  'review.presentation.practice': { zh: '建议多次练习Pitch，控制在3-5分钟内，重点突出创新点和社会价值。', en: 'Practice your pitch multiple times. Keep it 3-5 minutes, highlighting innovation and social value.' },
+
   // ==================== 导出报告 ====================
   'report.title': { zh: '# HackCheck 黑客松全流程报告', en: '# Hackathon Full-Process Report' },
   'report.generated': { zh: '生成时间:', en: 'Generated:' },
@@ -350,6 +397,11 @@ let _currentLang = 'zh';
 
 function getLang() {
   return _currentLang;
+}
+
+// 快速双语辅助函数：fb(中文, 英文)
+function fb(zh, en) {
+  return _currentLang === 'zh' ? zh : en;
 }
 
 function setLang(lang) {

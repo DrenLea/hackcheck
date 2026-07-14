@@ -1116,7 +1116,7 @@ function renderMultiChannelResults(channelResults, keywordGroups) {
         <div class="channel-stat-icon">${ch.icon}</div>
         <div class="channel-stat-name">${ch.name}</div>
         <div class="channel-stat-num">${stats.totalCount}</div>
-        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} 命中 · ${hitPct}%` : (ch.error ? t('search.networkLimited') : t('search.noResults'))}</div>
+        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} ${t('search.hitShort')} · ${hitPct}%` : (ch.error ? t('search.networkLimited') : t('search.noResults'))}</div>
       </div>
     `;
   }).join('');
@@ -1157,7 +1157,7 @@ function renderMultiChannelResults(channelResults, keywordGroups) {
 function renderChannelContent(channel, allTerms) {
   const repos = channel.stats?.repos || [];
   if (repos.length === 0) {
-    $('#channelContent').innerHTML = '<div class="channel-empty">该渠道未搜索到相关结果</div>';
+    $('#channelContent').innerHTML = '<div class="channel-empty">' + t('search.noResult') + '</div>';
     return;
   }
 
@@ -1167,9 +1167,9 @@ function renderChannelContent(channel, allTerms) {
   const totalCountLabel = totalCount > 1000 ? `${(totalCount/1000).toFixed(1)}k` : totalCount;
 
   let statsHTML = `<div class="search-stats">`;
-  statsHTML += `<div class="stat-item"><span class="stat-num">${totalCountLabel}</span><span class="stat-label">${channel.name}总结果</span></div>`;
-  statsHTML += `<div class="stat-item"><span class="stat-num">${matchedCount}/${repos.length}</span><span class="stat-label">命中相关</span></div>`;
-  statsHTML += `<div class="stat-item"><span class="stat-num">${hitRatio}%</span><span class="stat-label">命中百分比</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${totalCountLabel}</span><span class="stat-label">${channel.name}${t('search.totalResults')}</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${matchedCount}/${repos.length}</span><span class="stat-label">${t('search.matched')}</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${hitRatio}%</span><span class="stat-label">${t('search.hitRate')}</span></div>`;
   statsHTML += `</div>`;
 
   const reposHTML = repos.map((repo, idx) => {
@@ -1189,8 +1189,8 @@ function renderChannelContent(channel, allTerms) {
       ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">' + t('search.expand') + '</span>' : ''}
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
-        ${repo.updated_at ? `<span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>` : ''}
-        ${isHit ? '<span class="repo-hit">✅ 命中</span>' : '<span class="repo-miss">⚪ 不相关</span>'}
+        ${repo.updated_at ? `<span class="repo-updated">${t('search.updatedAt')} ${new Date(repo.updated_at).toLocaleDateString(getLang() === 'zh' ? 'zh-CN' : 'en-US')}</span>` : ''}
+        ${isHit ? `<span class="repo-hit">${t('search.hit')}</span>` : `<span class="repo-miss">${t('search.miss')}</span>`}
       </div>
     </div>
   `;
@@ -1431,9 +1431,9 @@ function renderGithubResults(repos, searchStats) {
   const totalCountLabel = totalCount > 1000 ? `${(totalCount/1000).toFixed(1)}k` : totalCount;
 
   let statsHTML = `<div class="search-stats">`;
-  statsHTML += `<div class="stat-item"><span class="stat-num">${totalCountLabel}</span><span class="stat-label">GitHub总结果</span></div>`;
-  statsHTML += `<div class="stat-item"><span class="stat-num">${matchedCount}/${repos.length}</span><span class="stat-label">命中相关</span></div>`;
-  statsHTML += `<div class="stat-item"><span class="stat-num">${hitRatio}%</span><span class="stat-label">命中百分比</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${totalCountLabel}</span><span class="stat-label">${t('search.githubTotal')}</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${matchedCount}/${repos.length}</span><span class="stat-label">${t('search.matched')}</span></div>`;
+  statsHTML += `<div class="stat-item"><span class="stat-num">${hitRatio}%</span><span class="stat-label">${t('search.hitRate')}</span></div>`;
   statsHTML += `</div>`;
 
   $('#repoList').innerHTML = statsHTML + repos.map(repo => {
@@ -1453,8 +1453,8 @@ function renderGithubResults(repos, searchStats) {
       ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">' + t('search.expand') + '</span>' : ''}
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
-        <span class="repo-updated">更新于 ${new Date(repo.updated_at).toLocaleDateString('zh-CN')}</span>
-        ${isHit ? '<span class="repo-hit">✅ 命中</span>' : '<span class="repo-miss">⚪ 不相关</span>'}
+        <span class="repo-updated">${t('search.updatedAt')} ${new Date(repo.updated_at).toLocaleDateString(getLang() === 'zh' ? 'zh-CN' : 'en-US')}</span>
+        ${isHit ? `<span class="repo-hit">${t('search.hit')}</span>` : `<span class="repo-miss">${t('search.miss')}</span>`}
       </div>
     </div>
   `;
@@ -1569,9 +1569,9 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
 
   // 判定
   const verdicts = {
-    blue: { icon: '🌊', text: '蓝海项目！这个方向稀缺度高，社会价值显著，有很大机会脱颖而出。', color: 'var(--accent-primary)' },
-    yellow: { icon: '⚡', text: '黄海项目。方向有一定竞争，但通过差异化策略可以脱颖而出。', color: 'var(--accent-warning)' },
-    red: { icon: '🔥', text: '红海项目。这个方向已有大量同类项目，需要找到独特切入点。', color: 'var(--accent-danger)' }
+    blue: { icon: '🌊', text: t('verdict.blue'), color: 'var(--accent-primary)' },
+    yellow: { icon: '⚡', text: t('verdict.yellow'), color: 'var(--accent-warning)' },
+    red: { icon: '🔥', text: t('verdict.red'), color: 'var(--accent-danger)' }
   };
   const v = verdicts[analysis.oceanType] || verdicts.yellow;
   $('#topicVerdict').innerHTML = `<div class="verdict-card" style="border-color:${v.color}"><span class="verdict-icon">${v.icon}</span><span class="verdict-text">${v.text}</span></div>`;
@@ -1580,21 +1580,21 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
   const ss = analysis.searchStats || {};
   const totalCountLabel = ss.totalCount > 1000 ? `${(ss.totalCount/1000).toFixed(1)}k` : (ss.totalCount || 0);
   const hitPct = Math.round((ss.hitRatio || 0) * 100);
-  let searchSummaryHTML = '<div class="search-summary-card"><h4>📈 搜索稀缺度分析</h4><div class="search-summary-stats">';
-  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${totalCountLabel}</span><span class="ss-label">GitHub 仓库总数</span></div>`;
-  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${ss.matchedCount || 0}/${ss.resultCount || 0}</span><span class="ss-label">相关命中</span></div>`;
-  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${hitPct}%</span><span class="ss-label">命中百分比</span></div>`;
-  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${analysis.multiScores.scarcity}</span><span class="ss-label">稀缺度评分</span></div>`;
+  let searchSummaryHTML = '<div class="search-summary-card"><h4>' + t('analysis.searchScarcity') + '</h4><div class="search-summary-stats">';
+  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${totalCountLabel}</span><span class="ss-label">${t('analysis.githubTotal')}</span></div>`;
+  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${ss.matchedCount || 0}/${ss.resultCount || 0}</span><span class="ss-label">${t('analysis.relatedHits')}</span></div>`;
+  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${hitPct}%</span><span class="ss-label">${t('analysis.hitPercentage')}</span></div>`;
+  searchSummaryHTML += `<div class="ss-stat"><span class="ss-num">${analysis.multiScores.scarcity}</span><span class="ss-label">${t('analysis.scarcityScore')}</span></div>`;
   searchSummaryHTML += '</div>';
   // 评分依据
   let basis = '';
-  if (ss.totalCount === 0) basis = '未搜索到任何同类项目，极度稀缺';
-  else if (ss.totalCount < 10) basis = `仅找到 ${ss.totalCount} 个相关仓库，属于极度稀缺方向`;
-  else if (ss.totalCount < 50) basis = `找到 ${ss.totalCount} 个相关仓库，稀缺度较高`;
-  else if (ss.totalCount < 200) basis = `找到 ${ss.totalCount} 个相关仓库，竞争适中`;
-  else if (ss.totalCount < 1000) basis = `找到 ${ss.totalCount} 个相关仓库，方向较常见`;
-  else basis = `找到超过 ${totalCountLabel} 个相关仓库，方向非常常见`;
-  if (ss.resultCount > 0 && hitPct < 50) basis += `；命中百分比仅 ${hitPct}%，说明大部分搜索结果与你的项目不直接相关，有差异化空间`;
+  if (ss.totalCount === 0) basis = t('scarcity.none');
+  else if (ss.totalCount < 10) basis = t('scarcity.veryLow') + ' ' + ss.totalCount + ' ' + t('scarcity.repos');
+  else if (ss.totalCount < 50) basis = t('scarcity.found') + ' ' + ss.totalCount + ' ' + t('scarcity.low');
+  else if (ss.totalCount < 200) basis = t('scarcity.found') + ' ' + ss.totalCount + ' ' + t('scarcity.medium');
+  else if (ss.totalCount < 1000) basis = t('scarcity.found') + ' ' + ss.totalCount + ' ' + t('scarcity.high');
+  else basis = t('scarcity.over') + ' ' + totalCountLabel + ' ' + t('scarcity.veryHigh');
+  if (ss.resultCount > 0 && hitPct < 50) basis += t('scarcity.diffSpace') + ' ' + hitPct + t('scarcity.diffSpaceDesc');
   searchSummaryHTML += `<p class="ss-basis">${basis}</p></div>`;
 
   // 多维分数（在分数区域前插入搜索摘要）
@@ -1603,19 +1603,19 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
     ${searchSummaryHTML}
     <div class="multi-score-item">
       <div class="multi-score-bar"><div class="multi-score-fill" style="width:${scores.originality}%;background:linear-gradient(90deg,#00ffa3,#00d488)"></div></div>
-      <div class="multi-score-info"><span>原创性</span><span class="multi-score-value">${scores.originality}</span></div>
+      <div class="multi-score-info"><span>${t('analysis.originality')}</span><span class="multi-score-value">${scores.originality}</span></div>
     </div>
     <div class="multi-score-item">
       <div class="multi-score-bar"><div class="multi-score-fill" style="width:${scores.scarcity}%;background:linear-gradient(90deg,#4d8dff,#7c5cff)"></div></div>
-      <div class="multi-score-info"><span>稀缺度（基于搜索结果）</span><span class="multi-score-value">${scores.scarcity}</span></div>
+      <div class="multi-score-info"><span>${t('analysis.scarcityBased')}</span><span class="multi-score-value">${scores.scarcity}</span></div>
     </div>
     <div class="multi-score-item">
       <div class="multi-score-bar"><div class="multi-score-fill" style="width:${scores.meaning}%;background:linear-gradient(90deg,#ffb800,#ff8c00)"></div></div>
-      <div class="multi-score-info"><span>意义感</span><span class="multi-score-value">${scores.meaning}</span></div>
+      <div class="multi-score-info"><span>${t('analysis.meaningfulness')}</span><span class="multi-score-value">${scores.meaning}</span></div>
     </div>
     <div class="multi-score-item">
       <div class="multi-score-bar"><div class="multi-score-fill" style="width:${score}%;background:linear-gradient(90deg,#a78bfa,#7c5cff)"></div></div>
-      <div class="multi-score-info"><span>综合稀缺指数</span><span class="multi-score-value">${score}</span></div>
+      <div class="multi-score-info"><span>${t('analysis.overallScarcity')}</span><span class="multi-score-value">${score}</span></div>
     </div>
   `;
 
@@ -1623,17 +1623,17 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
   if (analysis.socialDemand) {
     const sd = analysis.socialDemand;
     const levelMap = {
-      strong: { icon: '🔥', label: '强需求', color: 'var(--accent-success)', desc: '发现多个真实用户需求表达，社会价值显著' },
-      medium: { icon: '✅', label: '中等需求', color: 'var(--accent-primary)', desc: '发现部分用户需求讨论' },
-      weak: { icon: '❓', label: '需求待验证', color: 'var(--text-muted)', desc: '未找到明确的需求表达，建议进一步调研' },
-      false_demand: { icon: '⚠️', label: '伪需求', color: 'var(--accent-warning)', desc: '用户认为现有方案已够用，需重新考量' },
+      strong: { icon: '🔥', label: t('socialDemand.strong'), color: 'var(--accent-success)', desc: t('socialDemand.strongDesc') },
+      medium: { icon: '✅', label: t('socialDemand.medium'), color: 'var(--accent-primary)', desc: t('socialDemand.mediumDesc') },
+      weak: { icon: '❓', label: t('socialDemand.weak'), color: 'var(--text-muted)', desc: t('socialDemand.weakDesc') },
+      false_demand: { icon: '⚠️', label: t('socialDemand.false'), color: 'var(--accent-warning)', desc: t('socialDemand.falseDesc') },
     };
     const lv = levelMap[sd.level] || levelMap.weak;
     const modText = sd.modifier > 0 ? `(+${sd.modifier})` : (sd.modifier < 0 ? `(${sd.modifier})` : '');
     let sdHTML = `<div class="social-demand-card" style="border-color:${lv.color}">
       <div class="social-demand-header">
         <span class="social-demand-icon">${lv.icon}</span>
-        <span class="social-demand-label">社媒需求发现</span>
+        <span class="social-demand-label">${t('socialDemand.title')}</span>
         <span class="social-demand-level" style="color:${lv.color}">${lv.label} ${modText}</span>
       </div>
       <p class="social-demand-desc">${lv.desc}</p>`;
@@ -1658,7 +1658,7 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
   // 查重结果
   if (analysis.matchedPatterns.length > 0) {
     $('#similarPatterns').innerHTML = analysis.matchedPatterns.slice(0, 5).map(p => {
-      const oceanBadge = { red: '<span class="ocean-badge red">红海</span>', yellow: '<span class="ocean-badge yellow">黄海</span>', blue: '<span class="ocean-badge blue">蓝海</span>' };
+      const oceanBadge = { red: '<span class="ocean-badge red">' + t('ocean.red') + '</span>', yellow: '<span class="ocean-badge yellow">' + t('ocean.yellow') + '</span>', blue: '<span class="ocean-badge blue">' + t('ocean.blue') + '</span>' };
       return `
         <div class="pattern-item">
           <div class="pattern-header">
@@ -1666,26 +1666,26 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
             ${oceanBadge[p.oceanType] || ''}
           </div>
           <div class="pattern-meta">
-            <span>稀缺度: ${'★'.repeat(p.scarcity)}${'☆'.repeat(5-p.scarcity)}</span>
-            <span>意义感: ${'★'.repeat(p.meaning)}${'☆'.repeat(5-p.meaning)}</span>
-            <span>匹配度: ${Math.round(p.matchRatio * 100)}%</span>
+            <span>${t('meta.scarcity')} ${'★'.repeat(p.scarcity)}${'☆'.repeat(5-p.scarcity)}</span>
+            <span>${t('meta.meaningfulness')} ${'★'.repeat(p.meaning)}${'☆'.repeat(5-p.meaning)}</span>
+            <span>${t('meta.matchRate')} ${Math.round(p.matchRatio * 100)}%</span>
           </div>
           <p class="pattern-advice">${p.advice}</p>
         </div>
       `;
     }).join('');
   } else {
-    $('#similarPatterns').innerHTML = '<div class="empty-hint">未检测到与常见模式的匹配，你的项目方向可能比较独特！</div>';
+    $('#similarPatterns').innerHTML = '<div class="empty-hint">' + t('empty.patterns') + '</div>';
   }
 
   // 加分因素
   if (analysis.matchedBoosters.length > 0) {
     $('#boostersFound').innerHTML = analysis.matchedBoosters.map(b => {
-      const typeLabels = { social: '社会价值', tech: '技术亮点', domain: '领域专精' };
+      const typeLabels = { social: t('booster.social'), tech: t('booster.tech'), domain: t('booster.domain') };
       return `<div class="booster-item"><span class="booster-badge ${b.type}">${typeLabels[b.type]||b.type}</span><span class="booster-label">${b.label}</span><span class="booster-boost">+${b.boost}</span></div>`;
     }).join('');
   } else {
-    $('#boostersFound').innerHTML = '<div class="empty-hint">未检测到加分因素。考虑加入无障碍、可持续发展、适老化等元素来提升项目价值。</div>';
+    $('#boostersFound').innerHTML = '<div class="empty-hint">' + t('empty.boosters') + '</div>';
   }
 
   // 差异化策略
@@ -1694,7 +1694,7 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
       <div class="diff-strategy"><span class="diff-num">${i+1}</span><span class="diff-text">${d}</span></div>
     `).join('');
   } else {
-    $('#differentiationStrategies').innerHTML = '<div class="empty-hint">你的项目方向较为独特，暂无特定差异化策略推荐。继续保持创新！</div>';
+    $('#differentiationStrategies').innerHTML = '<div class="empty-hint">' + t('empty.differentiation') + '</div>';
   }
 }
 
@@ -2867,9 +2867,9 @@ function generatePitchSections(ctx, info) {
   let impactContent = `<p>${name} 可以直接帮助<strong>${users}</strong>解决${info.problem || '实际问题'}。</p>`;
   if (ctx.topicScore > 0) {
     if (ctx.topicScore >= 70) {
-      impactContent += `<p>这个方向在GitHub上同类项目极少（稀缺度评分 ${ctx.topicScore}/100），有很大的<strong>先发优势和社会价值</strong>。</p>`;
+      impactContent += `<p>` + tf('review.impact.high', {score: ctx.topicScore}) + `</p>`;
     } else if (ctx.topicScore < 45) {
-      impactContent += `<p>虽然市场上已有同类产品，但 ${name} 通过差异化功能切入，有望服务到<strong>被现有方案忽略的用户群体</strong>。</p>`;
+      impactContent += `<p>` + tf('review.impact.mid', {name: name}) + `</p>`;
     }
   }
   impactContent += `<p>如果推广开来，预计能显著改善${users}的体验和效率。</p>`;
@@ -2900,7 +2900,7 @@ function generatePitchSections(ctx, info) {
       title: '解决方案', icon: '💡', duration: '45秒',
       content: solutionContent,
       plainText: solutionContent.replace(/<[^>]+>/g, ''),
-      tips: ['突出与竞品的差异化', '强调核心创新点，不要泛泛而谈']
+      tips: [t('review.tip.diff'), t('review.tip.focus')]
     },
     {
       title: '核心Demo', icon: '🎬', duration: '60秒',
@@ -2918,7 +2918,7 @@ function generatePitchSections(ctx, info) {
       title: '影响力', icon: '🌟', duration: '20秒',
       content: impactContent,
       plainText: impactContent.replace(/<[^>]+>/g, ''),
-      tips: ['用量化数据增强说服力', '强调社会价值而非仅商业价值']
+      tips: [t('review.tip.data'), t('review.tip.social')]
     },
     {
       title: '未来展望', icon: '🚀', duration: '10秒',
@@ -2943,18 +2943,32 @@ function exportPitch() {
 
 function renderReviewAgents() {
   const container = $('#reviewAgents');
+  const agentNames = {
+    code_quality: fb('代码质量评审员', 'Code Quality Reviewer'),
+    ux_design: fb('用户体验评审员', 'UX Design Reviewer'),
+    innovation: fb('创新性评审员', 'Innovation Reviewer'),
+    technical: fb('技术深度评审员', 'Technical Depth Reviewer'),
+    presentation: fb('演示与表达评审员', 'Presentation Reviewer')
+  };
+  const agentFocus = {
+    code_quality: fb('从工程实践角度评估代码质量', 'Evaluating code quality from engineering practice'),
+    ux_design: fb('从用户视角评估产品设计', 'Evaluating product design from user perspective'),
+    innovation: fb('评估项目的创新性和差异化', 'Evaluating project innovation and differentiation'),
+    technical: fb('评估技术实现的难度和完成度', 'Evaluating technical difficulty and completeness'),
+    presentation: fb('评估Pitch表达和演示效果', 'Evaluating pitch presentation and demo effectiveness')
+  };
   container.innerHTML = PITCH_DATA.agents.map(agent => `
     <div class="review-agent" data-agent="${agent.id}">
       <div class="agent-header">
         <span class="agent-icon" style="color:${agent.color}">${agent.icon}</span>
-        <div><div class="agent-name">${agent.name}</div><div class="agent-focus">${agent.focus}</div></div>
+        <div><div class="agent-name">${agentNames[agent.id] || agent.name}</div><div class="agent-focus">${agentFocus[agent.id] || agent.focus}</div></div>
       </div>
       <div class="agent-criteria" id="criteria-${agent.id}">
         ${agent.criteria.map(c => `
           <div class="criterion" data-agent="${agent.id}" data-criterion="${c.id}">
             <div class="criterion-info">
               <span class="criterion-text">${c.text}</span>
-              <span class="criterion-weight">${c.weight}分</span>
+              <span class="criterion-weight">${c.weight}${t('eval.points')}</span>
             </div>
             <div class="criterion-rating">
               ${[0,1,2,3,4,5].map(n => `<button class="rating-btn ${AppState.pitch.review.ratings[agent.id] && AppState.pitch.review.ratings[agent.id][c.id] === n ? 'active' : ''}" data-rating="${n}">${n}</button>`).join('')}
@@ -3054,181 +3068,181 @@ function evaluateCriterion(agentId, criterion, info, parsed) {
   switch(criterion.id) {
     // === 代码质量评审员 ===
     case 'structure':
-      if (info.techStack.length >= 4) { score = 4; feedback = `技术栈包含${info.techStack.length}项技术，表明有前后端分离的架构意识。建议确保目录结构清晰（src/、config/、tests/）。`; }
-      else if (info.techStack.length >= 2) { score = 3; feedback = `技术栈较少（${info.techStack.length}项），需关注代码模块化。建议将业务逻辑与UI分离。`; }
-      else { score = 2; feedback = '技术栈单一，代码可能集中在少数文件中。建议拆分模块，提高可维护性。'; }
+      if (info.techStack.length >= 4) { score = 4; feedback = fb(`技术栈包含${info.techStack.length}项技术，表明有前后端分离的架构意识。建议确保目录结构清晰（src/、config/、tests/）。`, `Tech stack includes ${info.techStack.length} technologies, showing front-back separation awareness. Ensure clear directory structure (src/, config/, tests/).`); }
+      else if (info.techStack.length >= 2) { score = 3; feedback = fb(`技术栈较少（${info.techStack.length}项），需关注代码模块化。建议将业务逻辑与UI分离。`, `Minimal tech stack (${info.techStack.length} items). Focus on code modularization. Separate business logic from UI.`); }
+      else { score = 2; feedback = fb('技术栈单一，代码可能集中在少数文件中。建议拆分模块，提高可维护性。', 'Single tech stack, code may be concentrated in few files. Split modules for maintainability.'); }
       break;
     case 'readability':
-      score = 3; feedback = '建议使用有意义的变量名和函数名，避免缩写。关键业务逻辑应添加注释。';
+      score = 3; feedback = fb('建议使用有意义的变量名和函数名，避免缩写。关键业务逻辑应添加注释。', 'Use meaningful variable and function names, avoid abbreviations. Add comments for key business logic.');
       break;
     case 'error_handling':
-      if (hasTech('FastAPI') || hasTech('Express') || hasTech('Flask') || hasTech('Django')) { score = 3; feedback = '使用了后端框架，建议为API接口添加try-catch和统一的错误响应格式。'; }
-      else { score = 2; feedback = '未检测到后端框架，错误处理可能不足。建议至少在前端添加全局错误捕获。'; }
+      if (hasTech('FastAPI') || hasTech('Express') || hasTech('Flask') || hasTech('Django')) { score = 3; feedback = fb('使用了后端框架，建议为API接口添加try-catch和统一的错误响应格式。', 'Using backend framework. Add try-catch and unified error response format for API endpoints.'); }
+      else { score = 2; feedback = fb('未检测到后端框架，错误处理可能不足。建议至少在前端添加全局错误捕获。', 'No backend framework detected, error handling may be insufficient. Add global error catching on frontend at least.'); }
       break;
     case 'comments':
-      score = 3; feedback = '黑客松项目中注释容易被忽略，建议至少为核心算法和API接口添加注释。';
+      score = 3; feedback = fb('黑客松项目中注释容易被忽略，建议至少为核心算法和API接口添加注释。', 'Comments are often skipped in hackathons. Add comments for core algorithms and API endpoints at least.');
       break;
     case 'no_hardcode':
       if (info.devFindings && info.devFindings.secrets && info.devFindings.secrets.length > 0) {
-        score = 1; feedback = `⚠️ 代码扫描发现${info.devFindings.secrets.length}处硬编码密钥/密码！这是严重安全问题，必须使用环境变量替代。`;
+        score = 1; feedback = fb(`⚠️ 代码扫描发现${info.devFindings.secrets.length}处硬编码密钥/密码！这是严重安全问题，必须使用环境变量替代。`, `⚠️ Code scan found ${info.devFindings.secrets.length} hardcoded secrets/passwords! Critical security issue. Must use environment variables instead.`);
       } else if (info.hasEnvFile) {
-        score = 4; feedback = '检测到.env文件，说明有使用环境变量的意识。确保.env已加入.gitignore。';
+        score = 4; feedback = fb('检测到.env文件，说明有使用环境变量的意识。确保.env已加入.gitignore。', 'Detected .env file, showing awareness of environment variables. Ensure .env is in .gitignore.');
       } else {
-        score = 3; feedback = '未进行代码扫描，无法确认是否存在硬编码。建议使用代码扫描模块检查。';
+        score = 3; feedback = fb('未进行代码扫描，无法确认是否存在硬编码。建议使用代码扫描模块检查。', 'No code scan performed, cannot confirm if hardcoding exists. Use the Code Scanner module to check.');
       }
       break;
     case 'dependency':
-      if (hasTech('React') || hasTech('Next.js') || hasTech('Vue')) { score = 4; feedback = '使用了主流框架，依赖管理较规范。建议锁定版本号（package-lock.json）。'; }
-      else { score = 3; feedback = '建议使用包管理器（npm/pip）管理依赖，并提交lock文件。'; }
+      if (hasTech('React') || hasTech('Next.js') || hasTech('Vue')) { score = 4; feedback = fb('使用了主流框架，依赖管理较规范。建议锁定版本号（package-lock.json）。', 'Using mainstream framework, dependency management is decent. Lock version numbers (package-lock.json).'); }
+      else { score = 3; feedback = fb('建议使用包管理器（npm/pip）管理依赖，并提交lock文件。', 'Use package managers (npm/pip) for dependencies and commit lock files.'); }
       break;
     case 'testing':
-      score = 2; feedback = '黑客松项目通常缺少测试。建议至少为核心功能编写1-2个基本测试用例，展示工程素养。';
+      score = 2; feedback = fb('黑客松项目通常缺少测试。建议至少为核心功能编写1-2个基本测试用例，展示工程素养。', 'Hackathon projects usually lack tests. Write 1-2 basic test cases for core features to show engineering maturity.');
       break;
     case 'version_control':
-      if (info.hasGitignore) { score = 4; feedback = '检测到.gitignore文件，版本控制意识良好。建议保持频繁提交，提交信息清晰。'; }
-      else { score = 2; feedback = '未检测到.gitignore文件！请参考Demo辅助模块的Git教程，创建.gitignore并上传到GitHub。'; }
+      if (info.hasGitignore) { score = 4; feedback = fb('检测到.gitignore文件，版本控制意识良好。建议保持频繁提交，提交信息清晰。', 'Detected .gitignore file, good version control awareness. Commit frequently with clear messages.'); }
+      else { score = 2; feedback = fb('未检测到.gitignore文件！请参考Demo辅助模块的Git教程，创建.gitignore并上传到GitHub。', 'No .gitignore detected! Follow the Git tutorial in Demo Helper module, create .gitignore and push to GitHub.'); }
       break;
 
     // === 用户体验评审员 ===
     case 'first_impression':
-      if (parsed.targetUsers) { score = 4; feedback = `项目面向"${parsed.targetUsers}"，建议首屏设计针对该用户群体的审美和使用习惯优化。`; }
-      else { score = 3; feedback = '建议首屏突出核心功能，用一句话让评委理解项目价值。'; }
+      if (parsed.targetUsers) { score = 4; feedback = fb(`项目面向"${parsed.targetUsers}"，建议首屏设计针对该用户群体的审美和使用习惯优化。`, `Project targets "${parsed.targetUsers}". Optimize first screen design for this group's aesthetics and usage habits.`); }
+      else { score = 3; feedback = fb('建议首屏突出核心功能，用一句话让评委理解项目价值。', 'Highlight core features on the first screen. Let judges understand project value in one sentence.'); }
       break;
     case 'navigation':
-      score = 3; feedback = '建议导航结构不超过3层，核心功能入口放在首屏可见位置。';
+      score = 3; feedback = fb('建议导航结构不超过3层，核心功能入口放在首屏可见位置。', 'Keep navigation under 3 levels. Place core feature entries visible on first screen.');
       break;
     case 'feedback':
-      score = 3; feedback = '建议为所有用户操作添加反馈：按钮点击loading、成功toast、失败提示。';
+      score = 3; feedback = fb('建议为所有用户操作添加反馈：按钮点击loading、成功toast、失败提示。', 'Add feedback for all user actions: button loading, success toasts, error prompts.');
       break;
     case 'responsive':
-      if (hasTech('React') || hasTech('Next.js')) { score = 4; feedback = '使用React/Next.js，可配合Tailwind CSS快速实现响应式。建议至少适配手机和桌面端。'; }
-      else { score = 3; feedback = '建议使用CSS媒体查询或Flexbox/Grid确保在不同屏幕尺寸下正常显示。'; }
+      if (hasTech('React') || hasTech('Next.js')) { score = 4; feedback = fb('使用React/Next.js，可配合Tailwind CSS快速实现响应式。建议至少适配手机和桌面端。', 'Using React/Next.js, pair with Tailwind CSS for responsive design. At least adapt for mobile and desktop.'); }
+      else { score = 3; feedback = fb('建议使用CSS媒体查询或Flexbox/Grid确保在不同屏幕尺寸下正常显示。', 'Use CSS media queries or Flexbox/Grid to ensure proper display across screen sizes.'); }
       break;
     case 'consistency':
-      score = 3; feedback = '建议统一配色方案（不超过3种主色）、字体（不超过2种）和组件风格。';
+      score = 3; feedback = fb('建议统一配色方案（不超过3种主色）、字体（不超过2种）和组件风格。', 'Unify color scheme (max 3 primary colors), fonts (max 2), and component styles.');
       break;
     case 'accessibility':
-      if (allText.includes('无障碍') || allText.includes('适老') || allText.includes('accessibility') || allText.includes('a11y')) { score = 5; feedback = '✅ 项目描述中提到了无障碍/适老化，这是极大的加分项！确保实现大字体、高对比度、语音辅助等功能。'; }
-      else { score = 2; feedback = '未检测到无障碍设计考量。建议至少添加alt文本、ARIA标签和键盘导航支持。'; }
+      if (allText.includes('无障碍') || allText.includes('适老') || allText.includes('accessibility') || allText.includes('a11y')) { score = 5; feedback = fb('✅ 项目描述中提到了无障碍/适老化，这是极大的加分项！确保实现大字体、高对比度、语音辅助等功能。', '✅ Project mentions accessibility/elderly-friendly design, a huge bonus! Ensure large fonts, high contrast, voice assistance.'); }
+      else { score = 2; feedback = fb('未检测到无障碍设计考量。建议至少添加alt文本、ARIA标签和键盘导航支持。', 'No accessibility considerations detected. Add alt text, ARIA labels, and keyboard navigation support at minimum.'); }
       break;
     case 'empty_state':
-      score = 3; feedback = '建议为列表空状态、加载中、错误状态都设计友好的提示页面。';
+      score = 3; feedback = fb('建议为列表空状态、加载中、错误状态都设计友好的提示页面。', 'Design friendly prompt pages for empty states, loading, and error states.');
       break;
     case 'performance':
-      score = 3; feedback = '建议优化首屏加载（<3秒），使用懒加载和代码分割。图片压缩后使用。';
+      score = 3; feedback = fb('建议优化首屏加载（<3秒），使用懒加载和代码分割。图片压缩后使用。', 'Optimize first screen loading (<3s), use lazy loading and code splitting. Compress images before use.');
       break;
 
     // === 创新性评审员 ===
     case 'novelty':
-      if (info.topicScore >= 70) { score = 5; feedback = `✅ 稀缺度评分${info.topicScore}分，项目方向非常新颖！GitHub上同类项目极少，有巨大差异化优势。`; }
-      else if (info.topicScore >= 45) { score = 3; feedback = `稀缺度评分${info.topicScore}分，方向有一定竞争。需要在功能或体验上找到独特切入点。`; }
-      else if (info.topicScore > 0) { score = 2; feedback = `⚠️ 稀缺度评分仅${info.topicScore}分，方向较常见。强烈建议参考选题评审中的差异化策略。`; }
-      else { score = 3; feedback = '建议先完成选题评审模块，获取稀缺度评分和差异化建议。'; }
+      if (info.topicScore >= 70) { score = 5; feedback = tf('review.originality.high', {score: info.topicScore}); }
+      else if (info.topicScore >= 45) { score = 3; feedback = tf('review.originality.mid', {score: info.topicScore}); }
+      else if (info.topicScore > 0) { score = 2; feedback = tf('review.originality.low', {score: info.topicScore}); }
+      else { score = 3; feedback = t('review.originality.none'); }
       break;
     case 'differentiation':
-      if (parsed.features.length >= 3) { score = 4; feedback = `检测到${parsed.features.length}个核心功能，建议在Pitch中突出最独特的1-2个功能作为差异化亮点。`; }
-      else { score = 3; feedback = '建议明确项目的核心差异化功能，在演示中重点展示。'; }
+      if (parsed.features.length >= 3) { score = 4; feedback = tf('review.innovation.rich', {count: parsed.features.length}); }
+      else { score = 3; feedback = t('review.innovation.poor'); }
       break;
     case 'ai_integration':
       const aiTechs = info.techStack.filter(t => ['OpenAI API','Claude API','Together AI','LangChain','Hugging Face','OpenAI'].some(n => t.includes(n)));
-      if (aiTechs.length >= 2) { score = 5; feedback = `使用了${aiTechs.length}种AI能力（${aiTechs.join('、')}），建议展示AI能力的深度整合而非简单调用。`; }
-      else if (aiTechs.length === 1) { score = 3; feedback = `使用了${aiTechs[0]}，建议不要仅做API套壳，要结合业务场景做定制化Prompt和后处理。`; }
-      else if (allText.includes('ai') || allText.includes('人工智能')) { score = 2; feedback = '项目提到AI但技术栈中未包含AI API。建议明确AI能力如何融入产品。'; }
-      else { score = 3; feedback = '项目未使用AI能力。如果不需要AI也可以，但如果加入AI可以提升竞争力。'; }
+      if (aiTechs.length >= 2) { score = 5; feedback = tf('review.ai.multi', {count: aiTechs.length, names: aiTechs.join('、')}); }
+      else if (aiTechs.length === 1) { score = 3; feedback = tf('review.ai.single', {name: aiTechs[0]}); }
+      else if (allText.includes('ai') || allText.includes('人工智能')) { score = 2; feedback = t('review.ai.mentioned'); }
+      else { score = 3; feedback = t('review.ai.none'); }
       break;
     case 'problem_fitting':
-      if (info.desc && info.desc.length > 50) { score = 4; feedback = '项目描述详细，问题与解决方案匹配度较高。建议在Pitch中清晰展示"问题→方案"的逻辑链。'; }
-      else { score = 3; feedback = '建议更详细地描述问题场景，确保解决方案与问题高度匹配。'; }
+      if (info.desc && info.desc.length > 50) { score = 4; feedback = t('review.problem.good'); }
+      else { score = 3; feedback = t('review.problem.weak'); }
       break;
     case 'scalability':
-      score = 3; feedback = '建议思考项目的可扩展方向：能否支持更多用户？能否扩展到其他场景？';
+      score = 3; feedback = t('review.scalability');
       break;
     case 'tech_combination':
-      if (info.techStack.length >= 5) { score = 4; feedback = `技术栈丰富（${info.techStack.length}项），组合有创意。注意确保${info.duration}小时内能完成。`; }
-      else if (info.techStack.length >= 3) { score = 3; feedback = '技术栈适中。考虑是否需要加入数据库、缓存等提升完成度。'; }
-      else { score = 3; feedback = '技术栈较少，可能是优点（聚焦）也可能是缺点（功能不足），需结合项目目标判断。'; }
+      if (info.techStack.length >= 5) { score = 4; feedback = tf('review.techcombo.rich', {count: info.techStack.length, duration: info.duration}); }
+      else if (info.techStack.length >= 3) { score = 3; feedback = t('review.techcombo.mid'); }
+      else { score = 3; feedback = t('review.techcombo.minimal'); }
       break;
     case 'user_insight':
-      if (parsed.targetUsers && info.desc.length > 50) { score = 4; feedback = `对目标用户"${parsed.targetUsers}"有较好的理解。建议在Pitch中用具体用户故事展示痛点。`; }
-      else { score = 3; feedback = '建议深入研究目标用户的真实痛点，用用户访谈或数据支撑。'; }
+      if (parsed.targetUsers && info.desc.length > 50) { score = 4; feedback = tf('review.userinsight.good', {users: parsed.targetUsers}); }
+      else { score = 3; feedback = t('review.userinsight.weak'); }
       break;
     case 'market_potential':
-      if (allText.includes('老年人') || allText.includes('无障碍') || allText.includes('环保') || allText.includes('乡村') || allText.includes('残障') || allText.includes('心理')) { score = 5; feedback = '✅ 项目具有显著的社会价值，面向弱势群体或社会问题，评委会非常认可。'; }
-      else { score = 3; feedback = '建议思考项目的社会价值，黑客松评委通常偏好有社会意义的项目。'; }
+      if (allText.includes('老年人') || allText.includes('无障碍') || allText.includes('环保') || allText.includes('乡村') || allText.includes('残障') || allText.includes('心理')) { score = 5; feedback = t('review.social.strong'); }
+      else { score = 3; feedback = t('review.social.week'); }
       break;
 
     // === 技术深度评审员 ===
     case 'complexity':
-      if (info.techStack.length >= 6) { score = 5; feedback = `技术栈复杂度高（${info.techStack.length}项），注意确保${info.duration}小时内能完成核心功能。`; }
-      else if (info.techStack.length >= 4) { score = 4; feedback = '技术复杂度适中，有足够的深度展示技术能力。'; }
-      else { score = 3; feedback = '技术实现相对简单，建议增加一些有难度的技术点提升竞争力。'; }
+      if (info.techStack.length >= 6) { score = 5; feedback = tf('review.complexity.high', {count: info.techStack.length, duration: info.duration}); }
+      else if (info.techStack.length >= 4) { score = 4; feedback = t('review.complexity.mid'); }
+      else { score = 3; feedback = t('review.complexity.low'); }
       break;
     case 'completeness':
-      if (info.demoDetected) { score = 4; feedback = '已检测项目类型并准备部署，完成度较高。建议确保核心功能端到端可用。'; }
-      else { score = 3; feedback = '建议确保核心功能完整实现，避免展示半成品功能。优先完成主流程。'; }
+      if (info.demoDetected) { score = 4; feedback = t('review.completeness.good'); }
+      else { score = 3; feedback = fb('建议确保核心功能完整实现，避免展示半成品功能。优先完成主流程。', 'Ensure core features are fully implemented. Avoid showing half-finished features. Prioritize main workflow.'); }
       break;
     case 'architecture':
       const hasBackend = hasTech('FastAPI') || hasTech('Express') || hasTech('Flask') || hasTech('Django');
       const hasDB = hasTech('PostgreSQL') || hasTech('MongoDB') || hasTech('SQLite') || hasTech('Supabase') || hasTech('Firebase');
-      if (hasBackend && hasDB) { score = 5; feedback = '前后端+数据库架构完整，系统设计合理。建议确保API设计RESTful规范。'; }
-      else if (hasBackend || hasDB) { score = 3; feedback = '有后端或数据库，但架构不够完整。建议补充缺失部分。'; }
-      else { score = 3; feedback = '前端-only项目也可以，但建议考虑数据持久化方案。'; }
+      if (hasBackend && hasDB) { score = 5; feedback = fb('前后端+数据库架构完整，系统设计合理。建议确保API设计RESTful规范。', 'Complete front-back-database architecture. Ensure RESTful API design.'); }
+      else if (hasBackend || hasDB) { score = 3; feedback = fb('有后端或数据库，但架构不够完整。建议补充缺失部分。', 'Has backend or database, but architecture incomplete. Fill in missing parts.'); }
+      else { score = 3; feedback = fb('前端-only项目也可以，但建议考虑数据持久化方案。', 'Frontend-only is acceptable, but consider data persistence solutions.'); }
       break;
     case 'api_design':
-      if (hasTech('FastAPI') || hasTech('Express') || hasTech('Flask') || hasTech('Django')) { score = 4; feedback = '使用后端框架，建议API遵循RESTful规范，统一响应格式（{code, data, message}）。'; }
-      else { score = 3; feedback = '如果使用第三方API，建议封装统一的API调用层，处理超时和错误。'; }
+      if (hasTech('FastAPI') || hasTech('Express') || hasTech('Flask') || hasTech('Django')) { score = 4; feedback = fb('使用后端框架，建议API遵循RESTful规范，统一响应格式（{code, data, message}）。', 'Using backend framework. Follow RESTful conventions with unified response format ({code, data, message}).'); }
+      else { score = 3; feedback = fb('如果使用第三方API，建议封装统一的API调用层，处理超时和错误。', 'If using third-party APIs, encapsulate a unified API layer with timeout and error handling.'); }
       break;
     case 'data_handling':
-      if (hasTech('PostgreSQL') || hasTech('MongoDB')) { score = 4; feedback = '使用关系型/文档数据库，建议设计合理的数据模型，注意索引优化。'; }
-      else if (hasTech('Firebase') || hasTech('Supabase')) { score = 4; feedback = '使用BaaS，数据处理便捷。注意设计合理的数据结构。'; }
-      else { score = 3; feedback = '建议考虑数据存储方案，至少使用localStorage保存关键状态。'; }
+      if (hasTech('PostgreSQL') || hasTech('MongoDB')) { score = 4; feedback = fb('使用关系型/文档数据库，建议设计合理的数据模型，注意索引优化。', 'Using relational/document database. Design proper data models and optimize indexes.'); }
+      else if (hasTech('Firebase') || hasTech('Supabase')) { score = 4; feedback = fb('使用BaaS，数据处理便捷。注意设计合理的数据结构。', 'Using BaaS, convenient data handling. Design proper data structures.'); }
+      else { score = 3; feedback = fb('建议考虑数据存储方案，至少使用localStorage保存关键状态。', 'Consider data storage solutions. Use localStorage for key states at minimum.'); }
       break;
     case 'security':
-      if (info.devScore > 0 && info.devScore < 50) { score = 1; feedback = `⚠️ 代码安全评分仅${info.devScore}分！存在安全隐患。请立即修复代码扫描中发现的问题。`; }
-      else if (info.devScore >= 80) { score = 5; feedback = `✅ 代码安全评分${info.devScore}分，安全措施到位。`; }
-      else { score = 3; feedback = '建议进行代码安全扫描，检查硬编码密钥、输入验证等基本安全措施。'; }
+      if (info.devScore > 0 && info.devScore < 50) { score = 1; feedback = fb(`⚠️ 代码安全评分仅${info.devScore}分！存在安全隐患。请立即修复代码扫描中发现的问题。`, `⚠️ Code security score only ${info.devScore}! Security risks exist. Fix issues found in code scan immediately.`); }
+      else if (info.devScore >= 80) { score = 5; feedback = fb(`✅ 代码安全评分${info.devScore}分，安全措施到位。`, `✅ Code security score ${info.devScore}, security measures are solid.`); }
+      else { score = 3; feedback = fb('建议进行代码安全扫描，检查硬编码密钥、输入验证等基本安全措施。', 'Run code security scans. Check for hardcoded secrets, input validation, and other basic security measures.'); }
       break;
     case 'performance_t':
-      score = 3; feedback = '建议关注首屏加载时间和API响应时间。使用浏览器DevTools检测性能瓶颈。';
+      score = 3; feedback = fb('建议关注首屏加载时间和API响应时间。使用浏览器DevTools检测性能瓶颈。', 'Monitor first screen load time and API response time. Use browser DevTools to detect performance bottlenecks.');
       break;
     case 'deployment_t':
-      if (info.demoDetected) { score = 4; feedback = `已检测项目类型（${info.demoType}），建议使用推荐的部署方案上线。`; }
-      else { score = 2; feedback = '建议在Demo辅助模块检测项目类型并选择部署方案。能在线访问的Demo大大加分。'; }
+      if (info.demoDetected) { score = 4; feedback = fb(`已检测项目类型（${info.demoType}），建议使用推荐的部署方案上线。`, `Project type detected (${info.demoType}). Use the recommended deployment plan to go live.`); }
+      else { score = 2; feedback = fb('建议在Demo辅助模块检测项目类型并选择部署方案。能在线访问的Demo大大加分。', 'Detect project type and select deployment plan in Demo Helper. An accessible online Demo is a big plus.'); }
       break;
 
     // === 演示与表达评审员 ===
     case 'value_prop':
-      if (info.oneLiner && info.oneLiner.length > 10) { score = 4; feedback = `一句话描述"${info.oneLiner}"简洁有力。建议在Pitch开场直接使用这句话。`; }
-      else { score = 2; feedback = '一句话描述不够清晰或太短。建议用"[产品名]是一个为[用户]解决[问题]的[方案]"格式。'; }
+      if (info.oneLiner && info.oneLiner.length > 10) { score = 4; feedback = fb(`一句话描述"${info.oneLiner}"简洁有力。建议在Pitch开场直接使用这句话。`, `One-liner "${info.oneLiner}" is concise and powerful. Use it directly in your pitch opening.`); }
+      else { score = 2; feedback = fb('一句话描述不够清晰或太短。建议用"[产品名]是一个为[用户]解决[问题]的[方案]"格式。', 'One-liner is unclear or too short. Use format: "[Product] is a [solution] for [users] to solve [problem]".'); }
       break;
     case 'demo_flow':
-      if (parsed.features.length >= 3) { score = 4; feedback = `有${parsed.features.length}个可演示功能。建议设计3步演示流程：打开→核心操作→展示结果。`; }
-      else { score = 3; feedback = '建议设计清晰的演示流程，提前准备好演示数据，只展示最核心的功能。'; }
+      if (parsed.features.length >= 3) { score = 4; feedback = fb(`有${parsed.features.length}个可演示功能。建议设计3步演示流程：打开→核心操作→展示结果。`, `${parsed.features.length} demonstrable features. Design a 3-step demo flow: open → core action → show result.`); }
+      else { score = 3; feedback = fb('建议设计清晰的演示流程，提前准备好演示数据，只展示最核心的功能。', 'Design a clear demo flow. Prepare demo data in advance. Only show the most core features.'); }
       break;
     case 'problem_statement':
-      if (info.desc && info.desc.includes('问题') && info.desc.length > 50) { score = 4; feedback = '项目描述中清晰阐述了问题。建议在Pitch中用数据或用户故事强化问题严重性。'; }
-      else { score = 3; feedback = '建议在Pitch中用具体数据（如"60%的老人忘记服药"）说明问题的严重性。'; }
+      if (info.desc && info.desc.includes('问题') && info.desc.length > 50) { score = 4; feedback = fb('项目描述中清晰阐述了问题。建议在Pitch中用数据或用户故事强化问题严重性。', 'Problem clearly described. Use data or user stories in pitch to emphasize problem severity.'); }
+      else { score = 3; feedback = fb('建议在Pitch中用具体数据（如"60%的老人忘记服药"）说明问题的严重性。', 'Use specific data (e.g., "60% of elderly forget medications") to convey problem severity in pitch.'); }
       break;
     case 'solution_clarity':
-      if (info.oneLiner && info.desc && info.desc.length > 50) { score = 4; feedback = '项目描述清晰，解决方案明确。建议在Pitch中用"问题→方案→效果"的逻辑展开。'; }
-      else { score = 3; feedback = '建议更清晰地说明解决方案的核心创新点，让评委一听就懂。'; }
+      if (info.oneLiner && info.desc && info.desc.length > 50) { score = 4; feedback = fb('项目描述清晰，解决方案明确。建议在Pitch中用"问题→方案→效果"的逻辑展开。', 'Clear description and solution. Structure pitch as "problem→solution→impact".'); }
+      else { score = 3; feedback = fb('建议更清晰地说明解决方案的核心创新点，让评委一听就懂。', 'Clarify the core innovation of your solution so judges understand immediately.'); }
       break;
     case 'visual_aid':
-      score = 3; feedback = '建议准备高质量的演示素材：1-3分钟演示视频、关键流程截图。如果可以，准备一页PPT总结。';
+      score = 3; feedback = fb('建议准备高质量的演示素材：1-3分钟演示视频、关键流程截图。如果可以，准备一页PPT总结。', 'Prepare high-quality demo materials: 1-3 min demo video, key flow screenshots. Prepare a one-page PPT summary if possible.');
       break;
     case 'tech_explanation':
-      if (info.techStack.length > 0) { score = 4; feedback = `技术栈（${info.techStack.slice(0,3).join(' + ')}）清晰。建议用通俗语言解释技术亮点，避免过多术语。`; }
-      else { score = 3; feedback = '建议在Pitch中简述技术方案，重点是创新点而非技术清单。'; }
+      if (info.techStack.length > 0) { score = 4; feedback = fb(`技术栈（${info.techStack.slice(0,3).join(' + ')}）清晰。建议用通俗语言解释技术亮点，避免过多术语。`, `Tech stack (${info.techStack.slice(0,3).join(' + ')}) is clear. Explain technical highlights in plain language, avoid jargon.`); }
+      else { score = 3; feedback = fb('建议在Pitch中简述技术方案，重点是创新点而非技术清单。', 'Briefly describe tech approach in pitch. Focus on innovations, not a tech list.'); }
       break;
     case 'future_plan':
-      score = 3; feedback = '建议准备1-2句未来展望：扩展场景、商业化路径、开源计划等。';
+      score = 3; feedback = fb('建议准备1-2句未来展望：扩展场景、商业化路径、开源计划等。', 'Prepare 1-2 sentences on future outlook: expansion scenarios, commercialization, open-source plans.');
       break;
     case 'qa_ready':
-      score = 3; feedback = '建议预想评委可能的3个问题：技术难点？竞争对手？商业模式？提前准备好答案。';
+      score = 3; feedback = fb('建议预想评委可能的3个问题：技术难点？竞争对手？商业模式？提前准备好答案。', 'Anticipate 3 likely judge questions: technical challenges? Competitors? Business model? Prepare answers in advance.');
       break;
 
     default:
-      score = 3; feedback = '建议关注此项评审标准，提升项目整体质量。';
+      score = 3; feedback = fb('建议关注此项评审标准，提升项目整体质量。', 'Pay attention to this review criterion to improve overall project quality.');
   }
 
   return { score, feedback };
@@ -3257,7 +3271,7 @@ function renderReviewAgentsWithFeedback(feedbacks) {
             <div class="criterion-rating">
               ${[0,1,2,3,4,5].map(n => `<button class="rating-btn ${rating === n ? 'active' : ''}" data-rating="${n}">${n}</button>`).join('')}
             </div>
-            ${fb ? `<div class="criterion-feedback" style="border-left: 2px solid ${scoreColor};"><span class="feedback-score" style="color:${scoreColor};">AI评分: ${rating}/5</span><span class="feedback-text">${fb}</span></div>` : ''}
+            ${fb ? `<div class="criterion-feedback" style="border-left: 2px solid ${scoreColor};"><span class="feedback-score" style="color:${scoreColor};">${t('pitch.aiScore')} ${rating}/5</span><span class="feedback-text">${fb}</span></div>` : ''}
           </div>
         `}).join('')}
       </div>
@@ -3282,13 +3296,13 @@ function renderReviewAgentsWithFeedback(feedbacks) {
       const fbScore = criterion.querySelector('.feedback-score');
       if (fbScore) {
         const scoreColor = rating >= 4 ? 'var(--accent-success)' : rating >= 3 ? 'var(--accent-warning)' : 'var(--accent-danger)';
-        fbScore.textContent = `AI评分: ${rating}/5`;
+        fbScore.textContent = `${t('pitch.aiScore')} ${rating}/5`;
         fbScore.style.color = scoreColor;
         criterion.querySelector('.criterion-feedback').style.borderLeftColor = scoreColor;
       }
 
       saveState();
-      showToast('评分已调整', 'info');
+      showToast(t('pitch.scoreAdjusted'), 'info');
     });
   });
 }
