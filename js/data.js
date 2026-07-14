@@ -906,7 +906,6 @@ const MODULE_SUBMODULES = {
     { id: 'description',  label: '项目描述',   icon: '📝' },
     { id: 'search',       label: '搜索结果',   icon: '🔍' },
     { id: 'analysis',     label: '稀缺度分析', icon: '📊' },
-    { id: 'strategies',   label: '差异化策略', icon: '🎯' },
   ],
   tech: [
     { id: 'config',       label: '团队配置',   icon: '⚙️' },

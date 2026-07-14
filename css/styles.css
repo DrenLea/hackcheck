@@ -65,12 +65,13 @@ body {
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
 }
-.logo { display: flex; align-items: center; gap: 12px; }
-.logo-icon { color: var(--accent-primary); display: flex; }
-.logo-text { display: flex; flex-direction: column; }
+.logo { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.logo-icon { color: var(--accent-primary); display: flex; flex-shrink: 0; }
+.logo-text { display: flex; flex-direction: column; line-height: 1.2; }
 .logo-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
 .logo-subtitle { font-size: 11px; color: var(--text-muted); }
 .header-right { display: flex; gap: 8px; }
+.header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 
 /* ============================================
    Buttons
@@ -171,6 +172,11 @@ body {
 .sidebar-toggle {
   padding: 6px;
   flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .sidebar-toggle:hover {
   background: var(--bg-hover);

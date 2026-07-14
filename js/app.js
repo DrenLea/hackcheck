@@ -204,15 +204,6 @@ function initTopicModule() {
   $('#charCount').textContent = `${ta.value.length} 字`;
 
   $('#searchBtn').addEventListener('click', handleTopicSearch);
-
-  // 渲染搜索平台
-  $('#searchPlatforms').innerHTML = TOPIC_DATA.searchPlatforms.map(p => `
-    <a href="${p.url}${encodeURIComponent(AppState.topic.description || 'hackathon')}" target="_blank" class="platform-link">
-      <span class="platform-icon">${p.icon}</span>
-      <span class="platform-name">${p.name}</span>
-      <span class="platform-desc">${p.desc}</span>
-    </a>
-  `).join('');
 }
 
 async function handleTopicSearch() {
@@ -309,42 +300,126 @@ function extractChineseKeywords(desc) {
   return query || desc.substring(0, 30);
 }
 
-// 统一的代理抓取工具：先试 r.jina.ai，失败后回退到 allorigins.win
-async function fetchViaProxy(targetUrl) {
-  // 方案1: r.jina.ai（返回Markdown，解析最方便）
-  const jinaUrl = `https://r.jina.ai/${targetUrl}`;
-  try {
-    const resp = await fetch(jinaUrl, { signal: AbortSignal.timeout(30000) });
-    if (resp.ok) {
-      const text = await resp.text();
-      if (text && text.length > 200) return text;
-    }
-  } catch(e) {
-    console.warn(`r.jina.ai failed for ${targetUrl}:`, e.message);
-  }
+// 代理并发控制：限制同时通过 allorigins.win 的请求数
+let _proxyConcurrent = 0;
+const _proxyQueue = [];
+const MAX_PROXY_CONCURRENT = 2;
+async function _acquireProxy() {
+  if (_proxyConcurrent < MAX_PROXY_CONCURRENT) { _proxyConcurrent++; return; }
+  await new Promise(r => _proxyQueue.push(r));
+  _proxyConcurrent++;
+}
+function _releaseProxy() {
+  _proxyConcurrent--;
+  if (_proxyQueue.length > 0) _proxyQueue.shift()();
+}
 
-  // 方案2: allorigins.win（返回原始HTML，转换为简易Markdown）
-  const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+// 统一的代理抓取工具：依次尝试多个CORS代理
+async function fetchViaProxy(targetUrl) {
+  await _acquireProxy();
   try {
-    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(30000) });
-    if (resp.ok) {
-      const html = await resp.text();
-      if (html && html.length > 200) {
-        // 将HTML中的<a>标签转换为Markdown链接格式
-        return html
-          .replace(/<a[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis, (_, url, text) => {
-            const cleanText = text.replace(/<[^>]+>/g, '').trim();
-            return cleanText ? `[${cleanText}](${url})` : '';
-          })
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/\n{3,}/g, '\n\n');
+  const proxies = [
+    // 方案1: cors.sh（前缀式代理，直接返回内容）
+    { url: `https://proxy.cors.sh/${targetUrl}`, type: 'html' },
+    // 方案2: cors.eu.org（前缀式代理）
+    { url: `https://cors.eu.org/${targetUrl}`, type: 'html' },
+    // 方案3: allorigins.win /get（JSON包装，作为备用）
+    { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, type: 'json' },
+  ];
+
+  for (const proxy of proxies) {
+    try {
+      const resp = await fetch(proxy.url, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      if (!text || text.length < 200) continue;
+
+      let html = text;
+      if (proxy.type === 'json') {
+        try {
+          const json = JSON.parse(text);
+          if (!json.contents || json.contents.length < 200) continue;
+          html = json.contents;
+        } catch { continue; }
       }
+
+      // 将HTML转换为类Markdown格式（让现有解析器能处理）
+      return html
+        // HTML标题 → Markdown标题
+        .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, '\n# $1\n')
+        .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, '\n## $1\n')
+        .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, '\n### $1\n')
+        .replace(/<h4[^>]*>([\s\S]*?)<\/h4>/gi, '\n#### $1\n')
+        // 列表项
+        .replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, '- $1\n')
+        // 段落和换行
+        .replace(/<p[^>]*>([\s\S]*?)<\/p>/gi, '$1\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        // 链接 → Markdown链接
+        .replace(/<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gis, (_, url, text) => {
+          const cleanText = text.replace(/<[^>]+>/g, '').trim();
+          return cleanText ? `[${cleanText}](${url})` : '';
+        })
+        // HTML实体解码
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ')
+        // 清除剩余HTML标签
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    } catch(e) {
+      console.warn(`Proxy [${proxy.type}] failed for ${targetUrl.substring(0, 60)}:`, e.message);
     }
-  } catch(e) {
-    console.warn(`allorigins.win failed for ${targetUrl}:`, e.message);
   }
 
   throw new Error('All proxies failed');
+  } finally {
+    _releaseProxy();
+  }
+}
+
+// JSON API 代理工具：先尝试直连，失败后通过 CORS 代理
+async function fetchJsonViaProxy(targetUrl) {
+  // 方案1: 直连（部分API支持CORS或用户有VPN时可用）
+  try {
+    const resp = await fetch(targetUrl, { signal: AbortSignal.timeout(5000) });
+    if (resp.ok) return await resp.json();
+  } catch(e) {
+    console.warn(`Direct JSON fetch failed for ${targetUrl.substring(0, 60)}:`, e.message);
+  }
+
+  // 方案2-3: 通过 cors.sh / cors.eu.org 代理
+  const corsProxies = [
+    `https://proxy.cors.sh/${targetUrl}`,
+    `https://cors.eu.org/${targetUrl}`,
+  ];
+  await _acquireProxy();
+  try {
+    for (const proxyUrl of corsProxies) {
+      try {
+        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) continue;
+        return await resp.json();
+      } catch(e) {
+        console.warn(`JSON proxy failed: ${e.message}`);
+      }
+    }
+    // 方案4: allorigins.win /get（备用）
+    try {
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+      const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      if (!data.contents) throw new Error('empty contents');
+      return JSON.parse(data.contents);
+    } catch(e) {
+      console.warn(`allorigins JSON proxy failed: ${e.message}`);
+    }
+    throw new Error('All JSON proxies failed');
+  } finally {
+    _releaseProxy();
+  }
 }
 
 // 多渠道并行搜索
@@ -367,27 +442,21 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
       }
       return { items: [], total_count: 0 };
     }},
-    { id: 'devpost', name: 'Devpost', icon: '🏆', searchFn: () => searchDevpost(searchQuery) },
-    { id: 'watcha', name: 'Watcha', icon: '🇨🇳', searchFn: () => searchWatcha(baiduQuery) },
-    { id: 'producthunt', name: 'ProductHunt', icon: '🚀', searchFn: () => searchProductHunt(searchQuery) },
-    { id: 'bing', name: 'Bing', icon: '🔍', searchFn: () => searchBing(searchQuery) },
-    { id: 'baidu', name: '百度', icon: '🔎', searchFn: () => searchBaidu(baiduQuery) },
+    // JSON API 渠道优先（通过 allorigins 代理，成功率更高）
     { id: 'wikipedia', name: 'Wikipedia', icon: '📚', searchFn: () => searchWikipedia(searchQuery) },
     { id: 'duckduckgo', name: 'DuckDuckGo', icon: '🦆', searchFn: () => searchDuckDuckGo(searchQuery) },
+    // HTML 搜索渠道
+    { id: 'baidu', name: '百度', icon: '🔎', searchFn: () => searchBaidu(baiduQuery) },
+    { id: 'bing', name: 'Bing', icon: '🔍', searchFn: () => searchBing(searchQuery) },
+    { id: 'devpost', name: 'Devpost', icon: '🏆', searchFn: () => searchDevpost(searchQuery) },
+    { id: 'producthunt', name: 'ProductHunt', icon: '🚀', searchFn: () => searchProductHunt(searchQuery) },
+    { id: 'watcha', name: 'Watcha', icon: '🇨🇳', searchFn: () => searchWatcha(baiduQuery) },
   ];
 
-  // 并行搜索所有渠道（对代理渠道添加错峰延迟避免限流）
-  const proxyChannelIds = ['devpost', 'watcha', 'producthunt', 'bing', 'baidu'];
-  let proxyIndex = 0;
+  // 并行搜索所有渠道（代理渠道通过信号量串行化，避免 allorigins.win 限流）
+  const proxyChannelIds = ['wikipedia', 'duckduckgo', 'baidu', 'bing', 'devpost', 'producthunt', 'watcha'];
   const results = await Promise.allSettled(
     channels.map(async ch => {
-      // 代理渠道错峰：第2个开始加500ms递增延迟
-      if (proxyChannelIds.includes(ch.id)) {
-        proxyIndex++;
-        if (proxyIndex > 1) {
-          await new Promise(r => setTimeout(r, 600 * (proxyIndex - 1)));
-        }
-      }
       try {
         const data = await ch.searchFn();
         return { ...ch, data, stats: calculateChannelStats(ch.id, data, allTerms, searchQuery), error: null };
@@ -470,9 +539,7 @@ async function searchDevpost(searchQuery) {
 // 搜索 Wikipedia 相关词条
 async function searchWikipedia(searchQuery) {
   const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&format=json&srlimit=5&origin=*`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('Wikipedia API error');
-  const data = await resp.json();
+  const data = await fetchJsonViaProxy(url);
 
   const items = (data.query?.search || []).map(item => ({
     name: item.title,
@@ -487,9 +554,7 @@ async function searchWikipedia(searchQuery) {
 // 搜索 DuckDuckGo Instant Answer
 async function searchDuckDuckGo(searchQuery) {
   const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json&no_html=1&skip_disambig=1`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('DuckDuckGo API error');
-  const data = await resp.json();
+  const data = await fetchJsonViaProxy(url);
 
   const items = [];
 
@@ -783,52 +848,67 @@ async function searchProductHunt(searchQuery) {
   return { items: products, total_count: products.length };
 }
 
-// 社媒需求发现：搜索 Reddit/V2EX 中的真实用户需求表达
+// 社媒需求发现：搜索 Reddit JSON API / V2EX API 中的真实用户需求表达
 async function searchSocialDemand(searchQuery, chineseQuery) {
   const demandSignals = [];
-  const searchUrls = [
-    `https://www.reddit.com/search/?q=${encodeURIComponent('I wish there was ' + searchQuery)}&sort=relevance&t=year`,
-    `https://www.reddit.com/search/?q=${encodeURIComponent('why is there no ' + searchQuery)}&sort=relevance&t=year`,
+
+  // Hacker News Algolia API（JSON API，通过 allorigins 代理可达）
+  const hnUrl = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(searchQuery)}&tags=story&hitsPerPage=10`;
+
+  // Reddit JSON API
+  const redditQueries = [
+    `I wish there was ${searchQuery}`,
+    `why is there no ${searchQuery}`,
+    `someone should build ${searchQuery}`,
   ];
-  if (chineseQuery && chineseQuery.length > 2) {
-    searchUrls.push(`https://www.v2ex.com/api/topics/search.json?q=${encodeURIComponent('要是有一个 ' + chineseQuery)}`);
-  }
+
+  // V2EX API
+  const v2exUrl = (chineseQuery && chineseQuery.length > 2)
+    ? `https://www.v2ex.com/api/topics/search.json?q=${encodeURIComponent(chineseQuery)}`
+    : null;
+
+  const allTasks = [
+    { url: hnUrl, type: 'hackernews' },
+    ...redditQueries.map(q => ({
+      url: `https://www.reddit.com/search.json?q=${encodeURIComponent(q)}&sort=relevance&t=year&limit=10`,
+      type: 'reddit',
+    })),
+  ];
+  if (v2exUrl) allTasks.push({ url: v2exUrl, type: 'v2ex' });
 
   const results = await Promise.allSettled(
-    searchUrls.map(async (url) => {
+    allTasks.map(async (task) => {
       try {
-        if (url.includes('v2ex.com')) {
-          const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-          if (!resp.ok) return [];
-          const data = await resp.json();
-          return (data || []).map(item => ({
+        const data = await fetchJsonViaProxy(task.url);
+
+        if (task.type === 'hackernews') {
+          return (data?.hits || []).slice(0, 8).map(item => ({
+            source: 'Hacker News',
+            title: item.title || item.story_title || '',
+            content: item.story_text || item.comment_text || item.title || '',
+            url: item.url || `https://news.ycombinator.com/item?id=${item.objectID}`,
+          }));
+        }
+
+        if (task.type === 'v2ex') {
+          return (data || []).slice(0, 5).map(item => ({
             source: 'V2EX',
             title: item.title || '',
             content: item.content || item.title || '',
             url: `https://www.v2ex.com/t/${item.id}`,
           }));
-        } else {
-          const text = await fetchViaProxy(url);
-          const signals = [];
-          const patterns = [
-            /I wish there (?:was|were) [^.!?]*/i,
-            /why is there no [^.!?]*/i,
-            /someone (?:should|needs to) (?:build|make|create) [^.!?]*/i,
-            /would (?:love|pay) (?:to )?(?:see|have) [^.!?]*/i,
-          ];
-          patterns.forEach(p => {
-            const matches = text.match(new RegExp(p.source, 'gi'));
-            if (matches) signals.push(...matches.slice(0, 3));
-          });
-          return signals.map(s => ({
-            source: 'Reddit',
-            title: s.substring(0, 100),
-            content: s,
-            url: url,
-          }));
         }
+
+        // Reddit JSON API: data.data.children[]
+        const posts = (data?.data?.children || []).map(c => c?.data).filter(Boolean);
+        return posts.map(post => ({
+          source: `Reddit r/${post.subreddit || 'all'}`,
+          title: post.title || '',
+          content: post.selftext || post.title || '',
+          url: `https://www.reddit.com${post.permalink || ''}`,
+        }));
       } catch(e) {
-        console.warn(`Social demand search failed:`, e.message);
+        console.warn(`Social demand [${task.type}] failed:`, e.message);
         return [];
       }
     })
@@ -838,26 +918,51 @@ async function searchSocialDemand(searchQuery, chineseQuery) {
     if (r.status === 'fulfilled' && r.value) demandSignals.push(...r.value);
   });
 
+  // 用正则匹配需求信号短语
+  const demandPatterns = [
+    /I wish there (?:was|were|is) [^.!?]{5,}/i,
+    /why is there no [^.!?]{5,}/i,
+    /someone (?:should|needs to|ought to) (?:build|make|create|develop) [^.!?]{5,}/i,
+    /would (?:love|pay) (?:to )?(?:see|have) [^.!?]{5,}/i,
+    /(?:need|looking for) (?:a |an |the )?[^.!?]{5,}/i,
+    /ask hn.*(?:wish|want|need|looking)/i,
+    /what (?:tool|app|service) do you (?:wish|want|need)/i,
+    /is there (?:a |an |any )?[^.!?]{5,}/i,
+    /要是有一个 [^。！？]{5,}/,
+    /希望有 [^。！？]{5,}/,
+  ];
+
+  // 筛选包含需求信号的帖子
+  const matchedSignals = demandSignals.filter(s => {
+    const text = `${s.title} ${s.content}`;
+    return demandPatterns.some(p => p.test(text));
+  });
+
+  // 如果匹配到的信号不够，也保留前几个帖子作为弱信号
+  const finalSignals = matchedSignals.length > 0
+    ? matchedSignals.slice(0, 5)
+    : demandSignals.slice(0, 3);
+
   // 评估需求强度
   let level = 'weak';
   let modifier = 0;
-  if (demandSignals.length >= 3) {
+  if (finalSignals.length >= 3) {
     level = 'strong';
     modifier = 10;
-  } else if (demandSignals.length >= 1) {
+  } else if (finalSignals.length >= 1) {
     level = 'medium';
     modifier = 5;
   }
 
   // 检测伪需求
   const falseDemandPatterns = /already (?:exists|have|good enough)|已经(?:有|够用)|不需要再/i;
-  const hasFalseDemand = demandSignals.some(s => falseDemandPatterns.test(s.content || s.title || ''));
-  if (hasFalseDemand && demandSignals.length < 3) {
+  const hasFalseDemand = finalSignals.some(s => falseDemandPatterns.test(s.content || s.title || ''));
+  if (hasFalseDemand && finalSignals.length < 3) {
     level = 'false_demand';
     modifier = -10;
   }
 
-  return { level, modifier, signals: demandSignals.slice(0, 5) };
+  return { level, modifier, signals: finalSignals };
 }
 
 // 计算各渠道搜索统计
@@ -911,7 +1016,7 @@ function renderMultiChannelResults(channelResults, keywordGroups) {
         <div class="channel-stat-icon">${ch.icon}</div>
         <div class="channel-stat-name">${ch.name}</div>
         <div class="channel-stat-num">${stats.totalCount}</div>
-        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} 命中 · ${hitPct}%` : (ch.error ? '搜索失败' : '无结果')}</div>
+        <div class="channel-stat-label">${hasResult ? `${stats.matchedCount}/${stats.repos.length} 命中 · ${hitPct}%` : (ch.error ? '网络受限' : '无结果')}</div>
       </div>
     `;
   }).join('');
@@ -1218,6 +1323,7 @@ function analyzeTopic(description, keywordGroups, searchStats, socialDemand) {
   const descLower = description.toLowerCase();
   const allTerms = keywordGroups.allTerms || [];
   const socialDemandMod = socialDemand ? socialDemand.modifier : 0;
+  searchStats = searchStats || {};
 
   // 1. 检测匹配的常见模式
   const matchedPatterns = [];
@@ -1402,9 +1508,9 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
     }
     sdHTML += '</div>';
 
-    // 插入到 multiScores 之后
-    const msEl = $('#topicMultiScores');
-    msEl.insertAdjacentHTML('beforeend', sdHTML);
+    // 插入到专用容器
+    const sdEl = $('#socialDemandResult');
+    if (sdEl) sdEl.innerHTML = sdHTML;
   }
 
   // 查重结果
@@ -1448,33 +1554,6 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
   } else {
     $('#differentiationStrategies').innerHTML = '<div class="empty-hint">你的项目方向较为独特，暂无特定差异化策略推荐。继续保持创新！</div>';
   }
-
-  // 更新搜索平台链接（使用英文关键词）
-  const searchQuery = encodeURIComponent(keywordGroups.searchQuery || keywordGroups.searchTerms.slice(0, 3).join(' '));
-  $('#searchPlatforms').innerHTML = TOPIC_DATA.searchPlatforms.map(p => `
-    <a href="${p.url}${searchQuery}" target="_blank" class="platform-link">
-      <span class="platform-icon">${p.icon}</span>
-      <div><span class="platform-name">${p.name}</span><span class="platform-desc">${p.desc}</span></div>
-    </a>
-  `).join('');
-
-  // 建议
-  let adviceHTML = '<div class="advice-card"><h4>💡 优化建议</h4><ul>';
-  if (analysis.oceanType === 'red') {
-    adviceHTML += '<li>当前方向竞争激烈，强烈建议参考上方的<strong>差异化策略</strong>找到独特切入点</li>';
-    adviceHTML += '<li>尝试结合<strong>无障碍、适老化、可持续发展</strong>等方向重新定位项目</li>';
-  } else if (analysis.oceanType === 'yellow') {
-    adviceHTML += '<li>方向有一定潜力，通过差异化策略可以脱颖而出</li>';
-    adviceHTML += '<li>强化项目的<strong>社会价值</strong>叙述，让评委看到意义</li>';
-  } else {
-    adviceHTML += '<li>方向很好！稀缺度高，有差异化优势</li>';
-    adviceHTML += '<li>专注于<strong>快速实现MVP</strong>，用Demo证明可行性</li>';
-  }
-  if (analysis.matchedBoosters.length < 2) {
-    adviceHTML += '<li>考虑加入<strong>适老化、无障碍、可持续发展</strong>等元素提升项目意义</li>';
-  }
-  adviceHTML += '</ul></div>';
-  $('#topicAdvice').innerHTML = adviceHTML;
 }
 
 // ============================================
