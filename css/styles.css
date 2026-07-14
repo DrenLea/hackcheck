@@ -140,14 +140,14 @@ body {
   position: absolute; inset: 0;
 }
 .side-progress-fill {
-  position: absolute; bottom: 0; left: 0; right: 0;
+  position: absolute; top: 0; left: 0; right: 0;
   height: 0%;
-  background: linear-gradient(0deg, var(--accent-primary), #00d488, rgba(0,255,163,0.6));
+  background: linear-gradient(180deg, var(--accent-primary), #00d488, rgba(0,255,163,0.6));
   transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 0 10px rgba(0,255,163,0.5), 0 0 4px rgba(0,255,163,0.8);
 }
 .side-progress-fill::after {
-  content: ''; position: absolute; top: 0; left: -2px; right: -2px;
+  content: ''; position: absolute; bottom: 0; left: -2px; right: -2px;
   height: 8px;
   background: var(--accent-primary);
   border-radius: 2px;
