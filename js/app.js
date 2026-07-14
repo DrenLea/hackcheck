@@ -1177,16 +1177,13 @@ function renderChannelContent(channel, allTerms) {
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
     const hidden = idx >= 3 ? 'style="display:none;"' : '';
     const desc = repo.description || t('search.noDesc');
-    // 描述超过3行（约120字符）时折叠
-    const isLongDesc = desc.length > 120;
     return `
     <div class="repo-card ${isHit ? 'hit' : 'miss'} repo-item-${idx >= 3 ? 'extra' : 'visible'}" ${hidden}>
       <div class="repo-header">
         <a href="${repo.url || repo.html_url || '#'}" target="_blank" class="repo-name">${repo.name || repo.full_name}</a>
         <span class="repo-stars">${repo.stars || (repo.stargazers_count ? '⭐ ' + repo.stargazers_count : '')}</span>
       </div>
-      <p class="repo-desc ${isLongDesc ? 'collapsed' : ''}" ${isLongDesc ? `onclick="toggleDescExpand(this)"` : ''}>${desc}</p>
-      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">' + t('search.expand') + '</span>' : ''}
+      <p class="repo-desc">${desc}</p>
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
         ${repo.updated_at ? `<span class="repo-updated">${t('search.updatedAt')} ${new Date(repo.updated_at).toLocaleDateString(getLang() === 'zh' ? 'zh-CN' : 'en-US')}</span>` : ''}
@@ -1205,6 +1202,7 @@ function renderChannelContent(channel, allTerms) {
     : '';
 
   $('#channelContent').innerHTML = statsHTML + reposHTML + expandBtn;
+  checkDescTruncation($('#channelContent'));
 }
 
 // 展开/折叠搜索结果
@@ -1218,6 +1216,37 @@ function toggleRepoExpand() {
   extras.forEach(el => { el.style.display = isHidden ? '' : 'none'; });
   if (text) text.textContent = isHidden ? t('search.collapseAll') : `${t('search.expandRemaining')} ${extras.length} ${t('search.results')}`;
   if (icon) icon.textContent = isHidden ? '▲' : '▼';
+  // 展开后检测新显示的描述是否需要折叠
+  if (isHidden) {
+    requestAnimationFrame(() => checkDescTruncation($('#channelContent')));
+  }
+}
+
+// 渲染后检测描述是否超过3行，超过则添加折叠
+function checkDescTruncation(container) {
+  if (!container) return;
+  const descs = container.querySelectorAll('.repo-desc:not(.collapsed):not(.checked)');
+  descs.forEach(desc => {
+    // 跳过隐藏元素（display:none 时 scrollHeight=0 无法测量）
+    if (desc.offsetParent === null) return;
+    desc.classList.add('checked');
+    // 测量实际高度是否超过3行
+    const style = getComputedStyle(desc);
+    const lineHeight = parseFloat(style.lineHeight) || 19.5; // fallback: 13px * 1.5
+    const fullHeight = desc.scrollHeight;
+    const threshold = lineHeight * 3 + 2; // 3行 + 2px容差
+    if (fullHeight > threshold) {
+      // 超过3行，添加折叠
+      desc.classList.add('collapsed');
+      desc.setAttribute('onclick', 'toggleDescExpand(this)');
+      // 在描述后插入展开按钮
+      const toggle = document.createElement('span');
+      toggle.className = 'repo-desc-toggle';
+      toggle.setAttribute('onclick', 'toggleDescExpand(this)');
+      toggle.textContent = t('search.expand');
+      desc.after(toggle);
+    }
+  });
 }
 
 // 展开/折叠单条搜索结果的描述
@@ -1442,15 +1471,13 @@ function renderGithubResults(repos, searchStats) {
     const allTerms = (searchStats.allTerms || []);
     const isHit = allTerms.some(t => repoText.includes(t.toLowerCase()));
     const desc = repo.description || t('search.noDesc');
-    const isLongDesc = desc.length > 120;
     return `
     <div class="repo-card ${isHit ? 'hit' : 'miss'}">
       <div class="repo-header">
         <a href="${repo.html_url}" target="_blank" class="repo-name">${repo.full_name}</a>
         <span class="repo-stars">⭐ ${repo.stargazers_count}</span>
       </div>
-      <p class="repo-desc ${isLongDesc ? 'collapsed' : ''}" ${isLongDesc ? `onclick="toggleDescExpand(this)"` : ''}>${desc}</p>
-      ${isLongDesc ? '<span class="repo-desc-toggle" onclick="toggleDescExpand(this)">' + t('search.expand') + '</span>' : ''}
+      <p class="repo-desc">${desc}</p>
       <div class="repo-meta">
         ${repo.language ? `<span class="repo-lang">${repo.language}</span>` : ''}
         <span class="repo-updated">${t('search.updatedAt')} ${new Date(repo.updated_at).toLocaleDateString(getLang() === 'zh' ? 'zh-CN' : 'en-US')}</span>
@@ -1459,6 +1486,7 @@ function renderGithubResults(repos, searchStats) {
     </div>
   `;
   }).join('');
+  checkDescTruncation($('#repoList'));
 }
 
 function analyzeTopic(description, keywordGroups, searchStats, socialDemand) {
