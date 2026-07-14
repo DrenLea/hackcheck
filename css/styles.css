@@ -70,8 +70,36 @@ body {
 .logo-text { display: flex; flex-direction: column; line-height: 1.2; }
 .logo-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -0.5px; }
 .logo-subtitle { font-size: 11px; color: var(--text-muted); }
-.header-right { display: flex; gap: 8px; align-items: center; }
+.header-right { display: flex; gap: 12px; align-items: center; }
 .header-left { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+
+/* Header progress bar */
+.header-progress {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 4px;
+}
+.header-progress-track {
+  width: 120px; height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px; overflow: hidden;
+  position: relative;
+}
+.header-progress-fill {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--accent-primary), #00d488);
+  border-radius: 3px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(0,255,163,0.4);
+}
+.header-progress-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 32px;
+}
+.header-progress-fill[style*="width: 100%"] {
+  box-shadow: 0 0 12px rgba(0,255,163,0.6);
+}
 
 /* Language switch button */
 #langSwitchBtn {

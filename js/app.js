@@ -3532,6 +3532,12 @@ function updateOverallScore() {
   const progress = $('#overallProgress');
   const circumference = 2 * Math.PI * 34;
   progress.style.strokeDashoffset = circumference * (1 - avg / 100);
+
+  // 更新顶部进度条
+  const fill = $('#headerProgressFill');
+  const text = $('#headerProgressText');
+  if (fill) fill.style.width = avg + '%';
+  if (text) text.textContent = avg + '%';
 }
 
 // ============================================
@@ -3651,7 +3657,6 @@ function init() {
     switchSubmodule(AppState.currentModule, firstSub.id);
   }
 
-  $('#exportBtn').addEventListener('click', exportReport);
   $('#resetBtn').addEventListener('click', resetAll);
 
   // 恢复UI状态（try-catch 防止单个模块恢复失败影响整体）
