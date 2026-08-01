@@ -90,8 +90,40 @@ async function handleTopicSearch() {
     console.warn('Social demand search failed:', e.message);
   }
 
+  // 8.5 AI 语义判定（任务B）；失败退回 includes 字符串匹配
+  let aiAssess = null;
+  const assessItems = [];
+  ['github', 'devpost'].forEach(chId => {
+    const ch = channelResults.find(c => c.id === chId);
+    ((ch && ch.stats && ch.stats.repos) || []).slice(0, 8).forEach(r => {
+      assessItems.push({
+        channel: chId,
+        title: String(r.name || '').slice(0, 80),
+        desc: String(r.description || '').slice(0, 150),
+      });
+    });
+  });
+  const assessRes = await HackAI.aiTask('assess', {
+    summary: understandData ? understandData.summary : desc.slice(0, 100),
+    targetUser: understandData ? understandData.target_user : '',
+    results: assessItems,
+    patterns: TOPIC_DATA.commonPatterns.map(p => ({ id: p.id, pattern: p.pattern })),
+    boosters: TOPIC_DATA.originalityBoosters.map(b => b.keyword),
+    socialSignals: (socialDemand.signals || []).slice(0, 5)
+      .map(s => ('[' + s.source + '] ' + s.title).slice(0, 100)),
+  });
+  if (assessRes.ok) {
+    aiAssess = assessRes.data;
+    aiFlags.assess = true;
+    // AI 相关度判定覆盖 combinedStats 的字符串命中
+    combinedStats.hitRatio = aiAssess.hit_ratio;
+    combinedStats.matchedCount = aiAssess.results.filter(r => r.relevant).length;
+  } else {
+    console.warn('AI assess unavailable (' + assessRes.error + '), falling back');
+  }
+
   // 9. 分析稀缺度（含社媒需求调节）
-  const analysis = analyzeTopic(desc, keywordGroups, combinedStats, socialDemand);
+  const analysis = analyzeTopic(desc, keywordGroups, combinedStats, socialDemand, aiAssess);
   AppState.topic.score = analysis.compositeScore;
   AppState.topic.multiScores = analysis.multiScores;
   AppState.topic.analyzed = true;
@@ -1469,20 +1501,43 @@ function renderGithubResults(repos, searchStats) {
   checkDescTruncation($('#repoList'));
 }
 
-function analyzeTopic(description, keywordGroups, searchStats, socialDemand) {
+function analyzeTopic(description, keywordGroups, searchStats, socialDemand, aiAssess = null) {
   const descLower = description.toLowerCase();
   const allTerms = keywordGroups.allTerms || [];
-  const socialDemandMod = socialDemand ? socialDemand.modifier : 0;
+  let socialDemandMod = socialDemand ? socialDemand.modifier : 0;
+  if (aiAssess && aiAssess.social_demand) {
+    const AI_DEMAND_MOD = { strong: 10, medium: 5, weak: 0, false_demand: -10 };
+    socialDemandMod = AI_DEMAND_MOD[aiAssess.social_demand.level];
+    socialDemand = { ...(socialDemand || { signals: [] }),
+      level: aiAssess.social_demand.level, modifier: socialDemandMod,
+      aiReason: aiAssess.social_demand.reason || '' };
+  }
   searchStats = searchStats || {};
 
-  // 1. 检测匹配的常见模式
+  // 1. 匹配常见模式 + 加分因素（AI 语义判定优先，退回 includes 字符串匹配）
   const matchedPatterns = [];
-  TOPIC_DATA.commonPatterns.forEach(pattern => {
-    const matchCount = pattern.keywords.filter(kw => descLower.includes(kw.toLowerCase())).length;
-    if (matchCount > 0) {
-      matchedPatterns.push({ ...pattern, matchCount, matchRatio: matchCount / pattern.keywords.length });
-    }
-  });
+  const matchedBoosters = [];
+  if (aiAssess) {
+    aiAssess.matched_patterns.forEach(m => {
+      const p = TOPIC_DATA.commonPatterns.find(x => x.id === m.id);
+      if (p) matchedPatterns.push({ ...p, matchCount: 0,
+        matchRatio: clamp(m.match_ratio, 0, 1), aiReason: m.reason || '' });
+    });
+    aiAssess.matched_boosters.forEach(kw => {
+      const b = TOPIC_DATA.originalityBoosters.find(x => x.keyword === kw);
+      if (b) matchedBoosters.push(b);
+    });
+  } else {
+    TOPIC_DATA.commonPatterns.forEach(pattern => {
+      const matchCount = pattern.keywords.filter(kw => descLower.includes(kw.toLowerCase())).length;
+      if (matchCount > 0) {
+        matchedPatterns.push({ ...pattern, matchCount, matchRatio: matchCount / pattern.keywords.length });
+      }
+    });
+    TOPIC_DATA.originalityBoosters.forEach(booster => {
+      if (descLower.includes(booster.keyword.toLowerCase())) matchedBoosters.push(booster);
+    });
+  }
   matchedPatterns.sort((a, b) => b.matchRatio - a.matchRatio);
 
   // 2. 基于搜索结果计算稀缺度
@@ -1516,17 +1571,12 @@ function analyzeTopic(description, keywordGroups, searchStats, socialDemand) {
   }
   searchScarcity = clamp(Math.round(searchScarcity), 5, 98);
 
-  // 3. 检测加分因素
-  const matchedBoosters = [];
+  // 3. 应用加分因素
   let meaningBase = 50;
   let originalityBase = 70;
-
-  TOPIC_DATA.originalityBoosters.forEach(booster => {
-    if (descLower.includes(booster.keyword.toLowerCase())) {
-      matchedBoosters.push(booster);
-      meaningBase += booster.meaningBoost * 5;
-      originalityBase += booster.boost * 2;
-    }
+  matchedBoosters.forEach(b => {
+    meaningBase += b.meaningBoost * 5;
+    originalityBase += b.boost * 2;
   });
 
   // 4. 常见模式扣分
@@ -1552,8 +1602,22 @@ function analyzeTopic(description, keywordGroups, searchStats, socialDemand) {
   else if (compositeScore >= 45) oceanType = 'yellow';
   else oceanType = 'red';
 
+  // AI 判定的三个展示轴（不折进 compositeScore）；AI 不可用时用确定性规则粗算
+  const aiAxes = aiAssess ? {
+    feasibility: clamp(Math.round(aiAssess.feasibility), 0, 100),
+    demandStrength: clamp(Math.round(aiAssess.demand_strength), 0, 100),
+    differentiationSpace: clamp(Math.round(aiAssess.differentiation_space), 0, 100),
+    source: 'ai',
+  } : {
+    feasibility: 60,
+    demandStrength: ({ strong: 85, medium: 65, weak: 40, false_demand: 25 })[
+      (socialDemand && socialDemand.level) || 'weak'] || 40,
+    differentiationSpace: clamp(Math.round(100 - hitRatio * 100), 20, 90),
+    source: 'fallback',
+  };
+
   return {
-    matchedPatterns, matchedBoosters,
+    matchedPatterns, matchedBoosters, aiAxes,
     multiScores: { originality: originalityScore, scarcity: scarcityScore, meaning: meaningScore },
     compositeScore, oceanType,
     searchStats: { totalCount, hitRatio, matchedCount: searchStats.matchedCount || 0, resultCount: (searchStats.repos || []).length },
