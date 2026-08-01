@@ -54,7 +54,7 @@ async function handleTopicSearch() {
   $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>' + t('topic.loading') + '</span></div>';
 
   // 1. AI 输入理解（任务A）；失败退回 翻译API + conceptMap 提取
-  const aiFlags = { understand: false, assess: false, advise: false };
+  const aiFlags = { understand: false, assess: false, advise: false, compare: false };
   let understandData = null;
   let keywordGroups;
   const understandRes = await HackAI.aiTask('understand', { description: desc });
@@ -163,7 +163,32 @@ async function handleTopicSearch() {
     console.warn('AI advise unavailable (' + adviseRes.error + '), falling back');
   }
 
-  renderTopicResults(analysis, keywordGroups, combinedStats, advise, aiFlags);
+  // 9.6 AI 功能级对比矩阵（任务D）；仅在有足够相似项目时触发，失败则不显示该区块
+  // 借鉴 skill Phase2 + Agent-Reach 搜索策略：不是「算命中率」，而是把最相关的相似项目
+  // 当作竞品，逐项对比功能高低，输出「成熟实现 vs 差异点」——这是选题优化的核心结论。
+  let compare = null;
+  const compareProjects = (() => {
+    // 优先用 AI 判为相关的结果，保持其相关度顺序；AI 判定不足 3 个时用 GitHub/Devpost 前排补齐
+    const relevant = (aiAssess ? aiAssess.results : []).filter(r => r.relevant)
+      .map(r => assessItems[r.index]).filter(Boolean);
+    const pool = relevant.length >= 3 ? relevant : assessItems;
+    return pool.slice(0, 5);
+  })();
+  if (compareProjects.length >= 2) {
+    const compareRes = await HackAI.aiTask('compare', {
+      summary: understandData ? understandData.summary : desc.slice(0, 100),
+      targetUser: understandData ? understandData.target_user : '',
+      projects: compareProjects,
+    });
+    if (compareRes.ok) {
+      compare = compareRes.data;
+      aiFlags.compare = true;
+    } else {
+      console.warn('AI compare unavailable (' + compareRes.error + '), skipping compare section');
+    }
+  }
+
+  renderTopicResults(analysis, keywordGroups, combinedStats, advise, aiFlags, compare);
   updateOverallScore();
   saveState();
 
@@ -1662,7 +1687,65 @@ function analyzeTopic(description, keywordGroups, searchStats, socialDemand, aiA
   };
 }
 
-function renderTopicResults(analysis, keywordGroups, searchStats, advise = null, aiFlags = null) {
+// 渲染功能级对比矩阵（任务D输出）
+// overlap: 与竞品功能重合程度（high=重复过高）; maturity: 该功能在市场上的实现成熟度
+function renderCompareMatrix(compare) {
+  const section = $('#compareSection');
+  if (!section) return;
+  if (!compare || !Array.isArray(compare.matrix)) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  const OV = { high: { label: t('compare.overlapHigh'), cls: 'cmp-high' },
+    medium: { label: t('compare.overlapMedium'), cls: 'cmp-medium' },
+    low: { label: t('compare.overlapLow'), cls: 'cmp-low' },
+    none: { label: t('compare.overlapNone'), cls: 'cmp-none' } };
+  const MA = { mature: { label: t('compare.matMature'), cls: 'cmp-mature' },
+    partial: { label: t('compare.matPartial'), cls: 'cmp-partial' },
+    absent: { label: t('compare.matAbsent'), cls: 'cmp-absent' } };
+
+  // 功能 × 竞品 对比矩阵
+  let rows = compare.matrix.map(m => {
+    const ov = OV[m.overlap] || OV.none;
+    const ma = MA[m.maturity] || MA.absent;
+    const leaders = (m.leaders || []).map(escapeHtml).join('、');
+    return `<tr>
+      <td class="cmp-feature">${escapeHtml(m.feature)}</td>
+      <td><span class="cmp-tag ${ov.cls}">${ov.label}</span></td>
+      <td><span class="cmp-tag ${ma.cls}">${ma.label}</span></td>
+      <td class="cmp-note">${escapeHtml(m.note || '')}${leaders ? `<div class="cmp-leaders">${escapeHtml(t('compare.leaders'))}: ${leaders}</div>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  let html = `<div class="compare-table-wrap"><table class="compare-table">
+    <thead><tr>
+      <th>${escapeHtml(t('compare.colFeature'))}</th>
+      <th>${escapeHtml(t('compare.colOverlap'))}</th>
+      <th>${escapeHtml(t('compare.colMaturity'))}</th>
+      <th>${escapeHtml(t('compare.colNote'))}</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+
+  // 四个洞察区块：成熟实现 / 差异点 / 竞品独点 / 优化建议
+  const blocks = [
+    { key: 'mature', icon: '🧩', title: t('compare.matureTitle'), items: compare.mature, cls: 'cmp-mature-block' },
+    { key: 'gaps', icon: '⭐', title: t('compare.gapsTitle'), items: compare.gaps, cls: 'cmp-gaps-block' },
+    { key: 'competitor_unique', icon: '👀', title: t('compare.competitorTitle'), items: compare.competitor_unique, cls: 'cmp-comp-block' },
+    { key: 'recommendations', icon: '🚀', title: t('compare.recTitle'), items: compare.recommendations, cls: 'cmp-rec-block' },
+  ].filter(b => Array.isArray(b.items) && b.items.length > 0);
+
+  if (blocks.length > 0) {
+    html += '<div class="compare-insights">' + blocks.map(b =>
+      `<div class="compare-insight ${b.cls}"><h5>${b.icon} ${escapeHtml(b.title)}</h5><ul>` +
+      b.items.map(item => `<li>${escapeHtml(item)}</li>`).join('') +
+      '</ul></div>').join('') + '</div>';
+  }
+
+  $('#compareList').innerHTML = html;
+}
+
+function renderTopicResults(analysis, keywordGroups, searchStats, advise = null, aiFlags = null, compare = null) {
   $('#topicResults').style.display = 'block';
 
   // 分数：降级为参考信息；跨模块消费方（nav/总分/pitch/导出）不变
@@ -1672,8 +1755,11 @@ function renderTopicResults(analysis, keywordGroups, searchStats, advise = null,
   $('#topicCompositeSmall').textContent = score;
 
   // AI 增强徽章：任一任务走了 AI 路径就亮
-  const usedAI = !!(aiFlags && (aiFlags.understand || aiFlags.assess || aiFlags.advise));
+  const usedAI = !!(aiFlags && (aiFlags.understand || aiFlags.assess || aiFlags.advise || aiFlags.compare));
   $('#aiBadge').style.display = usedAI ? 'inline-flex' : 'none';
+
+  // 功能级对比矩阵（任务D）；无 compare 数据则隐藏区块
+  renderCompareMatrix(compare);
 
   // 六轴能力雷达图
   renderTopicRadar(analysis);

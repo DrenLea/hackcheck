@@ -1189,3 +1189,30 @@ body {
 .radar-legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 10px; }
 .radar-legend .dot.det { background: #00ffa3; }
 .radar-legend .dot.ai { background: #a78bfa; }
+
+/* ==================== 功能级对比矩阵（任务D） ==================== */
+.compare-section { margin-top: 20px; }
+.compare-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface); }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.compare-table th, .compare-table td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+.compare-table thead th { font-size: 12px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+.compare-table tbody tr:last-child td { border-bottom: none; }
+.cmp-feature { font-weight: 600; white-space: nowrap; }
+.cmp-note { color: var(--text-muted); min-width: 160px; }
+.cmp-leaders { font-size: 11px; margin-top: 4px; color: var(--text-muted); opacity: .85; }
+.cmp-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; white-space: nowrap; border: 1px solid transparent; }
+.cmp-high { background: rgba(239, 68, 68, 0.15); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
+.cmp-medium { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
+.cmp-low { background: rgba(0, 255, 163, 0.12); color: #00ffa3; border-color: rgba(0, 255, 163, 0.35); }
+.cmp-none { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border-color: rgba(148, 163, 184, 0.3); }
+.cmp-mature { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: rgba(59, 130, 246, 0.4); }
+.cmp-partial { background: rgba(167, 139, 250, 0.15); color: #a78bfa; border-color: rgba(167, 139, 250, 0.4); }
+.cmp-absent { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border-color: rgba(148, 163, 184, 0.3); }
+.compare-insights { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.compare-insight { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface); }
+.compare-insight h5 { margin: 0 0 8px; font-size: 13px; }
+.compare-insight ul { margin: 0; padding-left: 18px; }
+.compare-insight li { font-size: 13px; color: var(--text-muted); margin-bottom: 5px; line-height: 1.5; }
+.cmp-gaps-block { border-color: rgba(0, 255, 163, 0.35); }
+.cmp-rec-block { border-color: rgba(124, 92, 255, 0.35); }
+@media (max-width: 768px) { .compare-insights { grid-template-columns: 1fr; } }

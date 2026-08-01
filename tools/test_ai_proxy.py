@@ -59,6 +59,13 @@ def test_invalid_task_rejected():
     assert resp["error"] == "bad_request"
 
 
+def test_compare_task_accepted():
+    body = {"task": "compare", "messages": [{"role": "user", "content": "x"}]}
+    status, resp = ai_proxy.handle_ai_request(body, ENV, fetch=fake_fetch_ok)
+    assert status == 200
+    assert resp["ok"] is True
+
+
 def test_missing_messages_rejected():
     status, resp = ai_proxy.handle_ai_request({"task": "understand"}, ENV, fetch=fake_fetch_ok)
     assert status == 400
@@ -105,7 +112,7 @@ def test_upstream_body_uses_env_and_defaults():
     ai_proxy.handle_ai_request(GOOD_BODY, ENV, fetch=spy)
     assert captured["url"] == "https://api.openai-next.com/v1/chat/completions"
     assert captured["key"] == "sk-test"
-    assert captured["body"]["model"] == "gpt-4o-mini"
+    assert captured["body"]["model"] == "deepseek-v4-flash"
     assert captured["body"]["temperature"] == 0.3
     assert captured["body"]["response_format"] == {"type": "json_object"}
 

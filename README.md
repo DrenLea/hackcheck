@@ -83,6 +83,7 @@ A full-process assistant tool that helps zero-experience developers go from idea
 - **输入理解**：AI 翻译并提取搜索关键词（替代硬编码词表）
 - **语义匹配**：AI 判定搜索结果相关度与查重模式命中（替代字符串匹配）
 - **建议生成**：评分建议、定制差异化策略、蓝海方向推荐
+- **功能级对比矩阵**：把最相关的相似项目当作竞品，逐项对比功能重合度与市场成熟度，输出「成熟实现（勿重复造轮子）/ 你的差异点（获奖关键）/ 竞品独点（可借鉴）/ 按优先级的优化建议」
 
 配置项（`.env`，参考 `.env.example`）：
 
@@ -90,7 +91,7 @@ A full-process assistant tool that helps zero-experience developers go from idea
 |------|------|------|
 | `HACKCHECK_API_KEY` | 是 | OpenAI 兼容 API Key |
 | `AI_BASE_URL` | 否 | 默认 `https://api.openai-next.com/v1` |
-| `AI_MODEL` | 否 | 默认 `gpt-4o-mini` |
+| `AI_MODEL` | 否 | 默认 `deepseek-v4-flash`（低费率） |
 
 线上部署（Vercel）：在平台环境变量中配置同名变量，`api/ai.js` 自动生效。
 纯静态托管：页面 ⚙ 按钮可填自备 Key（仅存本机浏览器）。
@@ -242,6 +243,7 @@ With an API key configured, topic review upgrades to AI semantic analysis; witho
 - **Input Understanding**: AI translates and extracts search keywords (replaces hardcoded vocabulary)
 - **Semantic Matching**: AI judges search result relevance and duplicate-pattern hits (replaces string matching)
 - **Suggestion Generation**: score advice, tailored differentiation strategies, blue-ocean direction recommendations
+- **Feature Comparison Matrix**: treats the most relevant similar projects as competitors, compares feature overlap and market maturity item by item, and outputs "mature implementations (don't reinvent) / your differentiators (award key) / competitor strengths (worth borrowing) / prioritized recommendations"
 
 Configuration (`.env`, see `.env.example`):
 
@@ -249,7 +251,7 @@ Configuration (`.env`, see `.env.example`):
 |----------|----------|-------------|
 | `HACKCHECK_API_KEY` | Yes | OpenAI-compatible API key |
 | `AI_BASE_URL` | No | Defaults to `https://api.openai-next.com/v1` |
-| `AI_MODEL` | No | Defaults to `gpt-4o-mini` |
+| `AI_MODEL` | No | Defaults to `deepseek-v4-flash` (low cost) |
 
 Online deployment (Vercel): set the same environment variables on the platform — `api/ai.js` picks them up automatically.
 Pure static hosting: use the ⚙ button on the page to enter your own key (stored only in your local browser).

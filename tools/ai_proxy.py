@@ -13,8 +13,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_BASE_URL = 'https://api.openai-next.com/v1'
-DEFAULT_MODEL = 'gpt-4o-mini'
-VALID_TASKS = {'understand', 'assess', 'advise'}
+# 低成本模型；ds-v4-pro 在该中转站无渠道（中继报 no available channels），
+# 用 deepseek-v4-flash（DeepSeek 最新代费率最低）替代，JSON 结构化输出稳定。
+DEFAULT_MODEL = 'deepseek-v4-flash'
+VALID_TASKS = {'understand', 'assess', 'advise', 'compare'}
 UPSTREAM_TIMEOUT = 18  # 秒，须小于前端的 20s 超时
 
 
@@ -39,12 +41,18 @@ def classify_upstream_error(status):
 
 
 def _http_fetch(url, key, body):
-    """POST 上游。返回 (status, text)；status=0 表示网络异常/超时。"""
+    """POST 上游。返回 (status, text)；status=0 表示网络异常/超时。
+    须带浏览器 UA：中转站前置 Cloudflare 会对 Python-urllib 默认 UA 返回 403（error 1010），
+    与真实的 key 认证失败（auth）无法区分。"""
     req = urllib.request.Request(
         url,
         data=json.dumps(body).encode('utf-8'),
         headers={'Content-Type': 'application/json',
-                 'Authorization': 'Bearer ' + key},
+                 'Authorization': 'Bearer ' + key,
+                 'Accept': 'application/json',
+                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                               'AppleWebKit/537.36 (KHTML, like Gecko) '
+                               'Chrome/126.0 Safari/537.36'},
         method='POST')
     try:
         with urllib.request.urlopen(req, timeout=UPSTREAM_TIMEOUT) as resp:

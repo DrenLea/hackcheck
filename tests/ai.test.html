@@ -5,7 +5,7 @@
 <body>
 <h3>js/ai.js 纯函数测试（零依赖）</h3>
 <pre id="out">loading...</pre>
-<script src="../js/ai.js?v=1"></script>
+<script src="../js/ai.js?v=2"></script>
 <script>
 const out = []; let failed = 0;
 function assert(name, cond) { out.push((cond ? 'PASS' : 'FAIL') + '  ' + name); if (!cond) failed++; }
@@ -41,6 +41,22 @@ try {
   assert('advise: 合法数据通过', T.advise.valid(goodC));
   assert('advise: score_advice 不足3条拒绝', !T.advise.valid({ ...goodC, score_advice: goodC.score_advice.slice(0,2) }));
   assert('advise: blue_ocean 缺 why 拒绝', !T.advise.valid({ ...goodC, blue_ocean:[{direction:'x'}] }));
+
+  // ---- compare schema ----
+  const goodM = { features:['提醒','识别'],
+    matrix:[
+      {feature:'提醒', overlap:'high', maturity:'mature', leaders:['MediSafe'], note:'n'},
+      {feature:'识别', overlap:'none', maturity:'absent', leaders:[], note:''}],
+    mature:['提醒已有成熟实现'], gaps:['方言语音'], competitor_unique:['家属通知'],
+    recommendations:['主打差异点1'] };
+  assert('compare: 合法数据通过', T.compare.valid(goodM));
+  assert('compare: features 为空拒绝', !T.compare.valid({ ...goodM, features: [] }));
+  assert('compare: 非法 overlap 拒绝', !T.compare.valid({ ...goodM,
+    matrix:[{feature:'x', overlap:'huge', maturity:'mature'}] }));
+  assert('compare: 非法 maturity 拒绝', !T.compare.valid({ ...goodM,
+    matrix:[{feature:'x', overlap:'high', maturity:'done'}] }));
+  assert('compare: 缺 recommendations 拒绝', !T.compare.valid({ ...goodM, recommendations: undefined }));
+  assert('compare: matrix 可为空数组（无竞品时）', T.compare.valid({ ...goodM, matrix: [] }));
 
   // ---- radar geometry ----
   const pts = window.HackAI.computeRadarPoints([100,100,100,100,100,100], 260, 100);

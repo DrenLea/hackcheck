@@ -8,7 +8,7 @@
   const TIMEOUT_MS = 20000;
   const LS_USER_KEY = 'hackcheck_user_ai'; // 用户自备 key: { key, baseUrl, model }
   const DEFAULT_BASE_URL = 'https://api.openai-next.com/v1';
-  const DEFAULT_MODEL = 'gpt-4o-mini';
+  const DEFAULT_MODEL = 'deepseek-v4-flash';
 
   // ---------- 工具 ----------
   function hashStr(s) {
@@ -111,6 +111,39 @@
           && d.score_advice.every(a => a && isStr(a.dimension) && isStr(a.why) && isStr(a.how))
           && isArr(d.differentiation) && d.differentiation.length > 0 && d.differentiation.every(isStr)
           && isArr(d.blue_ocean) && d.blue_ocean.every(b => b && isStr(b.direction) && isStr(b.why));
+      },
+    },
+
+    // 功能级对比矩阵：从描述中提取本项目功能，再与最相关的相似项目逐项对比，
+    // 输出【已有成熟实现 / 差异点（项目独有+竞品独有）/ 优先级优化建议】。
+    // 用于把选题从「稀缺度数字」升级为「做哪些功能才有差异化」的可执行结论。
+    compare: {
+      build(p) {
+        const list = p.projects.map((r, i) => i + '. [' + r.channel + '] ' + r.title + ' — ' + r.desc).join('\n');
+        return [
+          { role: 'system', content: SYS },
+          { role: 'user', content:
+            '本项目：' + p.summary + '\n目标用户：' + (p.targetUser || '未知') + '\n\n' +
+            '最相关的相似项目（按相关度排序）：\n' + (list || '（无相似项目）') + '\n\n' +
+            '请做功能级对比分析，输出 JSON：\n' +
+            '{"features":["本项目计划的核心功能，3-6个，简短动词短语"],' +
+            '"matrix":[{"feature":"与上面features一致的功能名","overlap":"high|medium|low|none",' +
+            '"maturity":"mature|partial|absent","leaders":["实现该功能最好的1-2个竞品名"],"note":"一句话说明重复度或差异空间"}],' +
+            '"mature":["哪些功能市面上已有很成熟的实现，建议直接复用/不重复造轮子，并点名1-2个成熟代表"],' +
+            '"gaps":["本项目独特且竞品基本没做的差异点，这是获奖关键，要突出"],' +
+            '"competitor_unique":["竞品有但本项目没考虑、值得借鉴补充的功能"],' +
+            '"recommendations":["按优先级排序的具体优化建议，3-5条，要可执行"]}\n' +
+            '要求：matrix 的 feature 必须来自 features；overlap=与竞品功能重合程度，maturity=该功能在市场上的实现成熟度。' },
+        ];
+      },
+      valid(d) {
+        const OV = ['high', 'medium', 'low', 'none'];
+        const MA = ['mature', 'partial', 'absent'];
+        return !!d && isArr(d.features) && d.features.length > 0 && d.features.every(isStr)
+          && isArr(d.matrix) && d.matrix.every(m => m && isStr(m.feature)
+            && OV.indexOf(m.overlap) >= 0 && MA.indexOf(m.maturity) >= 0)
+          && isArr(d.mature) && isArr(d.gaps) && isArr(d.competitor_unique)
+          && isArr(d.recommendations) && d.recommendations.every(isStr);
       },
     },
   };

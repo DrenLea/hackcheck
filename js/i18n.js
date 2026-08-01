@@ -395,6 +395,25 @@ const I18N = {
   'analysis.blueOceanRec': { zh: '🌊 蓝海方向推荐', en: '🌊 Blue Ocean Directions' },
   'blueOcean.examples': { zh: '参考案例', en: 'Examples' },
 
+  // 功能级对比矩阵（任务D）
+  'compare.title': { zh: '⚖️ 功能级对比矩阵', en: '⚖️ Feature Comparison Matrix' },
+  'compare.colFeature': { zh: '本项目功能', en: 'Feature' },
+  'compare.colOverlap': { zh: '与竞品重合度', en: 'Overlap' },
+  'compare.colMaturity': { zh: '市场成熟度', en: 'Maturity' },
+  'compare.colNote': { zh: '说明', en: 'Notes' },
+  'compare.leaders': { zh: '代表', en: 'Leaders' },
+  'compare.overlapHigh': { zh: '重合高', en: 'High' },
+  'compare.overlapMedium': { zh: '部分重合', en: 'Medium' },
+  'compare.overlapLow': { zh: '基本不重合', en: 'Low' },
+  'compare.overlapNone': { zh: '无重合', en: 'None' },
+  'compare.matMature': { zh: '已很成熟', en: 'Mature' },
+  'compare.matPartial': { zh: '部分实现', en: 'Partial' },
+  'compare.matAbsent': { zh: '几乎空白', en: 'Absent' },
+  'compare.matureTitle': { zh: '已有成熟实现', en: 'Already Mature (don\'t reinvent)' },
+  'compare.gapsTitle': { zh: '你的差异点（获奖关键）', en: 'Your Differentiators' },
+  'compare.competitorTitle': { zh: '竞品独点（可借鉴）', en: 'Competitor Strengths' },
+  'compare.recTitle': { zh: '优化建议（按优先级）', en: 'Recommendations (by priority)' },
+
   // 雷达图 + AI 徽章 + 自备 Key
   'topic.aiEnhanced': { zh: 'AI 增强', en: 'AI Enhanced' },
   'topic.compositeRef': { zh: '综合参考分', en: 'Composite (ref.)' },
