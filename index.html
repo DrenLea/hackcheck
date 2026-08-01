@@ -216,17 +216,20 @@
         <!-- 分析结果 -->
         <div class="topic-results" id="topicResults" style="display:none;">
           <div class="topic-score-section">
-            <div class="topic-gauge">
-              <div class="gauge-ring" id="topicGauge">
-                <div class="gauge-value" id="topicScarcityScore">--</div>
-                <div class="gauge-label" data-i18n="topic.scarcityIndex">稀缺指数</div>
+            <div class="topic-verdict-main">
+              <div class="topic-verdict" id="topicVerdict"></div>
+              <div class="topic-composite-small">
+                <span data-i18n="topic.compositeRef">综合参考分</span>
+                <span id="topicCompositeSmall">--</span>
+                <span class="ai-badge" id="aiBadge" style="display:none;">🤖 <span data-i18n="topic.aiEnhanced">AI 增强</span></span>
+                <button class="ai-config-btn" id="aiConfigBtn">⚙</button>
               </div>
             </div>
-            <div class="topic-verdict" id="topicVerdict"></div>
+            <div class="topic-radar" id="topicRadar"></div>
           </div>
 
           <div class="multi-scores-section">
-            <h4 class="detail-title" data-i18n="analysis.multiScore">📊 多维度评分</h4>
+            <h4 class="detail-title" data-i18n="analysis.multiScoreRef">📊 多维度评分（参考）</h4>
             <div class="multi-scores" id="topicMultiScores"></div>
           </div>
 

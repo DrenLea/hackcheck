@@ -16,6 +16,24 @@ function initTopicModule() {
   $('#charCount').textContent = `${ta.value.length} ${t('topic.charCount')}`;
 
   $('#searchBtn').addEventListener('click', handleTopicSearch);
+
+  // 用户自备 API Key（无服务端时的兜底；key 存 localStorage，浏览器直连）
+  const cfgBtn = $('#aiConfigBtn');
+  if (cfgBtn) {
+    cfgBtn.title = t('topic.aiConfigTitle');
+    cfgBtn.addEventListener('click', () => {
+      const key = prompt(t('topic.aiConfigKeyPrompt'), '');
+      if (key === null) return;                       // 取消：不动现有配置
+      if (key.trim() === '') {                        // 清空：删除自备配置
+        HackAI.setUserAiConfig('');
+        showToast(t('topic.aiConfigCleared'), 'info');
+        return;
+      }
+      const baseUrl = prompt(t('topic.aiConfigUrlPrompt'), 'https://api.openai-next.com/v1') || '';
+      HackAI.setUserAiConfig(key.trim(), baseUrl.trim(), '');
+      showToast(t('topic.aiConfigSaved'), 'success');
+    });
+  }
 }
 
 async function handleTopicSearch() {
@@ -1647,14 +1665,18 @@ function analyzeTopic(description, keywordGroups, searchStats, socialDemand, aiA
 function renderTopicResults(analysis, keywordGroups, searchStats, advise = null, aiFlags = null) {
   $('#topicResults').style.display = 'block';
 
-  // 分数
+  // 分数：降级为参考信息；跨模块消费方（nav/总分/pitch/导出）不变
   const score = analysis.compositeScore;
-  $('#topicScarcityScore').textContent = score;
   $('#topicScore').textContent = score;
   $('#navScoreTopic').textContent = score;
+  $('#topicCompositeSmall').textContent = score;
 
-  const gauge = $('#topicGauge');
-  gauge.style.background = `conic-gradient(var(--accent-primary) 0deg, var(--accent-primary) ${score * 3.6}deg, rgba(255,255,255,0.05) ${score * 3.6}deg)`;
+  // AI 增强徽章：任一任务走了 AI 路径就亮
+  const usedAI = !!(aiFlags && (aiFlags.understand || aiFlags.assess || aiFlags.advise));
+  $('#aiBadge').style.display = usedAI ? 'inline-flex' : 'none';
+
+  // 六轴能力雷达图
+  renderTopicRadar(analysis);
 
   // 判定
   const verdicts = {
@@ -1829,4 +1851,51 @@ function renderTopicResults(analysis, keywordGroups, searchStats, advise = null,
   } else {
     boSection.style.display = 'none';
   }
+}
+
+// 六轴能力雷达图：前3轴确定性计算，后3轴 AI 判定（或规则估算）
+function renderTopicRadar(analysis) {
+  const size = 260, maxR = 88, cx = size / 2, cy = size / 2;
+  const ax = analysis.aiAxes || { feasibility: 60, demandStrength: 40, differentiationSpace: 50, source: 'fallback' };
+  const axes = [
+    { label: t('radar.originality'), value: analysis.multiScores.originality, det: true },
+    { label: t('radar.scarcity'), value: analysis.multiScores.scarcity, det: true },
+    { label: t('radar.meaning'), value: analysis.multiScores.meaning, det: true },
+    { label: t('radar.feasibility'), value: ax.feasibility, det: false },
+    { label: t('radar.demand'), value: ax.demandStrength, det: false },
+    { label: t('radar.diffSpace'), value: ax.differentiationSpace, det: false },
+  ];
+  const n = axes.length, angleStep = (Math.PI * 2) / n;
+  const pts = HackAI.computeRadarPoints(axes.map(a => a.value), size, maxR);
+
+  let grid = '', axisLines = '', labels = '';
+  [0.25, 0.5, 0.75, 1].forEach(scale => {
+    let poly = '';
+    for (let i = 0; i < n; i++) {
+      const ang = i * angleStep - Math.PI / 2;
+      poly += `${cx + Math.cos(ang) * maxR * scale},${cy + Math.sin(ang) * maxR * scale} `;
+    }
+    grid += `<polygon points="${poly}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+  });
+  axes.forEach((a, i) => {
+    const ang = i * angleStep - Math.PI / 2;
+    axisLines += `<line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(ang) * maxR}" y2="${cy + Math.sin(ang) * maxR}" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>`;
+    const lx = cx + Math.cos(ang) * (maxR + 26), ly = cy + Math.sin(ang) * (maxR + 26);
+    const color = a.det ? 'rgba(255,255,255,0.75)' : 'rgba(167,139,250,0.95)';
+    labels += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="${color}" font-size="10" font-weight="600">${a.label}</text>`;
+    labels += `<text x="${lx}" y="${ly + 12}" text-anchor="middle" dominant-baseline="middle" fill="rgba(255,255,255,0.5)" font-size="9">${a.value}</text>`;
+  });
+  const dataPoints = pts.map(p => `${p.x},${p.y}`).join(' ');
+
+  $('#topicRadar').innerHTML = `
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="display:block;margin:0 auto">
+      ${grid}${axisLines}
+      <polygon points="${dataPoints}" fill="rgba(0,255,163,0.12)" stroke="#00ffa3" stroke-width="2"/>
+      ${pts.map((p, i) => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${axes[i].det ? '#00ffa3' : '#a78bfa'}"/>`).join('')}
+      ${labels}
+    </svg>
+    <p class="radar-legend">
+      <span class="dot det"></span>${t('radar.deterministic')}
+      <span class="dot ai"></span>${t('radar.aiJudged')}${ax.source === 'fallback' ? ' · ' + t('radar.fallbackNote') : ''}
+    </p>`;
 }

@@ -394,6 +394,25 @@ const I18N = {
   'analysis.scoreAdvice': { zh: '🧭 评分建议', en: '🧭 Score Advice' },
   'analysis.blueOceanRec': { zh: '🌊 蓝海方向推荐', en: '🌊 Blue Ocean Directions' },
   'blueOcean.examples': { zh: '参考案例', en: 'Examples' },
+
+  // 雷达图 + AI 徽章 + 自备 Key
+  'topic.aiEnhanced': { zh: 'AI 增强', en: 'AI Enhanced' },
+  'topic.compositeRef': { zh: '综合参考分', en: 'Composite (ref.)' },
+  'analysis.multiScoreRef': { zh: '📊 多维度评分（参考）', en: '📊 Dimension Scores (Reference)' },
+  'radar.originality': { zh: '原创性', en: 'Originality' },
+  'radar.scarcity': { zh: '稀缺度', en: 'Scarcity' },
+  'radar.meaning': { zh: '意义感', en: 'Meaning' },
+  'radar.feasibility': { zh: '可行性', en: 'Feasibility' },
+  'radar.demand': { zh: '需求强度', en: 'Demand' },
+  'radar.diffSpace': { zh: '差异化空间', en: 'Diff. Space' },
+  'radar.deterministic': { zh: '确定性计算', en: 'Deterministic' },
+  'radar.aiJudged': { zh: 'AI 判定', en: 'AI Judged' },
+  'radar.fallbackNote': { zh: 'AI 不可用，后三轴为规则估算', en: 'AI offline; last 3 axes rule-based' },
+  'topic.aiConfigTitle': { zh: '配置自备 API Key（无服务端时使用）', en: 'Configure your own API key (for static hosting)' },
+  'topic.aiConfigKeyPrompt': { zh: '输入你的 OpenAI 兼容 API Key（留空清除，取消不改动）：', en: 'Enter your OpenAI-compatible API key (empty to clear, cancel to keep):' },
+  'topic.aiConfigUrlPrompt': { zh: 'API Base URL：', en: 'API Base URL:' },
+  'topic.aiConfigSaved': { zh: '自备 Key 已保存到本机浏览器', en: 'Your key is saved in this browser only' },
+  'topic.aiConfigCleared': { zh: '自备 Key 已清除', en: 'Your key has been cleared' },
 };
 
 // ==================== 核心函数 ====================
