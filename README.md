@@ -114,7 +114,13 @@ hackcheck/
 ├── css/
 │   └── styles.css          # 全局样式
 ├── js/
-│   ├── app.js              # 核心业务逻辑
+│   ├── core.js             # 全局状态、导航、总分、导出、初始化
+│   ├── topic.js            # 阶段1：选题评审
+│   ├── tech.js             # 阶段2：技术选型
+│   ├── dev.js              # 阶段3：代码扫描
+│   ├── demo.js             # 阶段4：Demo辅助
+│   ├── pitch.js            # 阶段5：Pitch生成与评审
+│   ├── i18n.js             # 中英双语文案
 │   └── data.js             # 配置数据（技术栈、评审标准、查重库等）
 └── README.md
 ```
@@ -238,7 +244,13 @@ hackcheck/
 ├── css/
 │   └── styles.css          # Global styles
 ├── js/
-│   ├── app.js              # Core business logic
+│   ├── core.js             # Global state, navigation, overall score, export, init
+│   ├── topic.js            # Stage 1: Topic review
+│   ├── tech.js             # Stage 2: Tech selection
+│   ├── dev.js              # Stage 3: Code scan
+│   ├── demo.js             # Stage 4: Demo assistance
+│   ├── pitch.js            # Stage 5: Pitch generation & review
+│   ├── i18n.js             # Bilingual (zh/en) strings
 │   └── data.js             # Configuration data (tech stack, review criteria, pattern library, etc.)
 └── README.md
 ```
