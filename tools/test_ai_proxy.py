@@ -108,3 +108,17 @@ def test_upstream_body_uses_env_and_defaults():
     assert captured["body"]["model"] == "gpt-4o-mini"
     assert captured["body"]["temperature"] == 0.3
     assert captured["body"]["response_format"] == {"type": "json_object"}
+
+
+# ---------- is_forbidden_path ----------
+
+def test_dotfiles_forbidden():
+    assert ai_proxy.is_forbidden_path('/.env')
+    assert ai_proxy.is_forbidden_path('/.git/config')
+    assert ai_proxy.is_forbidden_path('/docs/.hidden/x.md')
+
+
+def test_normal_paths_allowed():
+    assert not ai_proxy.is_forbidden_path('/')
+    assert not ai_proxy.is_forbidden_path('/index.html')
+    assert not ai_proxy.is_forbidden_path('/js/core.js')

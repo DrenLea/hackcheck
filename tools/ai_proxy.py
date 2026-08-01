@@ -9,6 +9,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_BASE_URL = 'https://api.openai-next.com/v1'
@@ -82,3 +83,63 @@ def handle_ai_request(body, env, fetch=None):
         return 200, {'ok': True, 'data': json.loads(content)}
     except (KeyError, IndexError, ValueError, TypeError):
         return 200, {'ok': False, 'error': 'invalid_json'}
+
+
+def is_forbidden_path(path):
+    """含点段的路径（.env、.git 等）一律拒绝。"""
+    return any(part.startswith('.') for part in path.split('/') if part)
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=ROOT, **kwargs)
+
+    def _send_json(self, status, obj):
+        data = json.dumps(obj).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        path = self.path.split('?')[0]
+        if path == '/api/ai':
+            env = load_env(os.path.join(ROOT, '.env'))
+            self._send_json(200, {'ok': True,
+                                  'hasKey': bool(env.get('HACKCHECK_API_KEY'))})
+            return
+        if is_forbidden_path(path):
+            self._send_json(403, {'ok': False, 'error': 'forbidden'})
+            return
+        super().do_GET()
+
+    def do_POST(self):
+        if self.path.split('?')[0] != '/api/ai':
+            self._send_json(404, {'ok': False, 'error': 'not_found'})
+            return
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length).decode('utf-8'))
+        except (ValueError, TypeError):
+            self._send_json(400, {'ok': False, 'error': 'bad_request'})
+            return
+        env = load_env(os.path.join(ROOT, '.env'))
+        status, resp = handle_ai_request(body, env)
+        self._send_json(status, resp)
+
+    def log_message(self, fmt, *args):
+        pass  # 静默访问日志，保持终端干净
+
+
+def main():
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    print(f'HackCheck: http://localhost:{port}  (Ctrl+C 停止)')
+    try:
+        ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()
+    except KeyboardInterrupt:
+        print('\nbye')
+
+
+if __name__ == '__main__':
+    main()
