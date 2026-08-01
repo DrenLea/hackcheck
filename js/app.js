@@ -302,7 +302,8 @@ async function handleTopicSearch() {
 
   // 4. 并行搜索多个渠道
   const searchQuery = keywordGroups.searchQuery || keywordGroups.searchTerms.slice(0, 3).join(' ');
-  const channelResults = await multiChannelSearch(searchQuery, keywordGroups.allTerms, desc);
+  const ghPhraseQueries = keywordGroups.ghPhraseQueries || [];
+  const channelResults = await multiChannelSearch(searchQuery, keywordGroups.allTerms, desc, ghPhraseQueries);
 
   // 5. 渲染多渠道搜索结果
   renderMultiChannelResults(channelResults, keywordGroups);
@@ -368,21 +369,23 @@ function _releaseProxy() {
 }
 
 // 统一的代理抓取工具：依次尝试多个CORS代理
-async function fetchViaProxy(targetUrl) {
+async function fetchViaProxy(targetUrl, rawHtml = false) {
   await _acquireProxy();
   try {
   const proxies = [
-    // 方案1: cors.sh（前缀式代理，直接返回内容）
+    // 方案1: corsproxy.io（最稳定，支持Bing等搜索引擎，返回原始HTML）
+    { url: `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`, type: 'html' },
+    // 方案2: r.jina.ai 渲染代理（处理JS动态渲染的网站如Devpost，返回Markdown）
+    { url: `https://r.jina.ai/${targetUrl}`, type: 'jina' },
+    // 方案3: cors.sh（前缀式代理，部分网站可用）
     { url: `https://proxy.cors.sh/${targetUrl}`, type: 'html' },
-    // 方案2: cors.eu.org（前缀式代理）
-    { url: `https://cors.eu.org/${targetUrl}`, type: 'html' },
-    // 方案3: allorigins.win /get（JSON包装，作为备用）
+    // 方案4: allorigins.win /get（JSON包装，作为备用）
     { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, type: 'json' },
   ];
 
   for (const proxy of proxies) {
     try {
-      const resp = await fetch(proxy.url, { signal: AbortSignal.timeout(8000) });
+      const resp = await fetch(proxy.url, { signal: AbortSignal.timeout(12000) });
       if (!resp.ok) continue;
       const text = await resp.text();
       if (!text || text.length < 200) continue;
@@ -394,6 +397,12 @@ async function fetchViaProxy(targetUrl) {
           if (!json.contents || json.contents.length < 200) continue;
           html = json.contents;
         } catch { continue; }
+      }
+
+      // rawHtml模式：直接返回原始内容（Bing使用DOMParser解析HTML）
+      // jina.ai返回的是Markdown，也直接返回（已有Markdown解析器处理）
+      if (rawHtml || proxy.type === 'jina') {
+        return html;
       }
 
       // 将HTML转换为类Markdown格式（让现有解析器能处理）
@@ -436,22 +445,22 @@ async function fetchViaProxy(targetUrl) {
 async function fetchJsonViaProxy(targetUrl) {
   // 方案1: 直连（部分API支持CORS或用户有VPN时可用）
   try {
-    const resp = await fetch(targetUrl, { signal: AbortSignal.timeout(5000) });
+    const resp = await fetch(targetUrl, { signal: AbortSignal.timeout(3000) });
     if (resp.ok) return await resp.json();
   } catch(e) {
     console.warn(`Direct JSON fetch failed for ${targetUrl.substring(0, 60)}:`, e.message);
   }
 
-  // 方案2-3: 通过 cors.sh / cors.eu.org 代理
+  // 方案2-3: 通过 corsproxy.io / cors.sh 代理
   const corsProxies = [
+    `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
     `https://proxy.cors.sh/${targetUrl}`,
-    `https://cors.eu.org/${targetUrl}`,
   ];
   await _acquireProxy();
   try {
     for (const proxyUrl of corsProxies) {
       try {
-        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
         if (!resp.ok) continue;
         return await resp.json();
       } catch(e) {
@@ -476,13 +485,19 @@ async function fetchJsonViaProxy(targetUrl) {
 }
 
 // 多渠道并行搜索
-async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
-  // GitHub: 尝试多个查询（从精准到宽泛），取第一个有结果的
+async function multiChannelSearch(searchQuery, allTerms, originalDesc, ghPhraseQueries = []) {
+  // GitHub: P1优化 — 优先使用短语查询（精准搜），回退到宽泛搜索
   const searchTerms = searchQuery.split(' ');
-  const ghQueries = [];
-  if (searchTerms.length >= 3) ghQueries.push(searchTerms.slice(0, 3).join(' '));
-  if (searchTerms.length >= 2) ghQueries.push(searchTerms.slice(0, 2).join(' '));
-  ghQueries.push(searchTerms[0]);
+  let ghQueries = [];
+  // 如果有P1优化生成的短语查询，优先使用
+  if (ghPhraseQueries.length > 0) {
+    ghQueries = ghPhraseQueries;
+  } else {
+    // 回退到原有逻辑
+    if (searchTerms.length >= 3) ghQueries.push(searchTerms.slice(0, 3).join(' '));
+    if (searchTerms.length >= 2) ghQueries.push(searchTerms.slice(0, 2).join(' '));
+    ghQueries.push(searchTerms[0]);
+  }
 
   // 中文关键词（用于Bing中文搜索）
   const baiduQuery = extractChineseKeywords(originalDesc);
@@ -498,15 +513,35 @@ async function multiChannelSearch(searchQuery, allTerms, originalDesc) {
     // JSON API 渠道（通过 cors.sh/cors.eu.org 代理）
     { id: 'wikipedia', name: 'Wikipedia', icon: '📚', searchFn: () => searchWikipedia(searchQuery) },
     { id: 'duckduckgo', name: 'DuckDuckGo', icon: '🦆', searchFn: () => searchDuckDuckGo(searchQuery) },
-    // HTML 搜索渠道（通过 CORS 代理）
-    { id: 'bing', name: 'Bing', icon: '🔍', searchFn: () => searchBing(searchQuery) },
-    { id: 'bingcn', name: 'Bing中文', icon: '🇨🇳', searchFn: () => searchBingCN(baiduQuery) },
+    // Bing 搜索渠道（英文+中文合并）
+    { id: 'bing', name: 'Bing', icon: '🔍', searchFn: async () => {
+      const results = [];
+      const seen = new Set();
+      // 先搜英文，最多取5条
+      try {
+        const en = await searchBing(searchQuery);
+        en.items.forEach(item => {
+          if (results.length < 5 && !seen.has(item.url)) { seen.add(item.url); results.push(item); }
+        });
+      } catch(e) { console.warn('Bing EN failed:', e.message); }
+      // 再搜中文补充至8条
+      if (baiduQuery) {
+        try {
+          const cn = await searchBingCN(baiduQuery);
+          cn.items.forEach(item => {
+            if (results.length < 8 && !seen.has(item.url)) { seen.add(item.url); results.push(item); }
+          });
+        } catch(e) { console.warn('Bing CN failed:', e.message); }
+      }
+      if (results.length === 0) throw new Error('Bing: no results parsed');
+      return { items: results, total_count: results.length };
+    }},
     { id: 'devpost', name: 'Devpost', icon: '🏆', searchFn: () => searchDevpost(searchQuery) },
     { id: 'producthunt', name: 'ProductHunt', icon: '🚀', searchFn: () => searchProductHunt(searchQuery) },
   ];
 
   // 并行搜索所有渠道（代理渠道通过信号量串行化，避免代理限流）
-  const proxyChannelIds = ['wikipedia', 'duckduckgo', 'bing', 'bingcn', 'devpost', 'producthunt'];
+  const proxyChannelIds = ['wikipedia', 'duckduckgo', 'bing', 'devpost', 'producthunt'];
   const results = await Promise.allSettled(
     channels.map(async ch => {
       try {
@@ -637,104 +672,75 @@ async function searchDuckDuckGo(searchQuery) {
   return { items, total_count: items.length };
 }
 
-// 搜索 Bing 搜索引擎（通过代理渲染JS后解析Markdown）
+// 搜索 Bing 搜索引擎（通过RSS格式绕过CAPTCHA，用DOMParser解析XML）
 async function searchBing(searchQuery) {
-  const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}&count=10`;
+  // 使用format=rss绕过Bing的CAPTCHA检测
+  const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(searchQuery)}&count=10&format=rss`;
 
   let text = '';
   try {
-    text = await fetchViaProxy(targetUrl);
+    text = await fetchViaProxy(targetUrl, true);
   } catch(e) {
     console.warn('Bing proxy failed:', e.message);
     throw new Error('Bing search failed');
   }
 
-  if (!text || text.length < 500) throw new Error('Bing: empty response');
+  if (!text || text.length < 200) throw new Error('Bing: empty response');
 
-  // 解析Markdown提取搜索结果
-  // 格式: ## [Title](bing_redirect_url) 后跟描述文本
   const results = [];
-  const lines = text.split('\n');
   const seen = new Set();
 
-  for (let i = 0; i < lines.length && results.length < 8; i++) {
-    const line = lines[i];
-    // 匹配 ## [Title](URL) 或 ### [Title](URL)
-    const headingMatch = line.match(/^#{2,3}\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
-    if (headingMatch) {
-      const title = headingMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
-      const url = headingMatch[2];
-
-      // 跳过Bing自身的链接
-      if (url.includes('bing.com/search') || url.includes('bing.com/ck/a')) {
-        // 仍然记录，但使用Bing搜索URL作为回退
-      }
-      if (seen.has(url)) continue;
+  // 解析RSS XML
+  const doc = new DOMParser().parseFromString(text, 'text/xml');
+  const items = doc.querySelectorAll('item');
+  items.forEach(item => {
+    if (results.length >= 8) return;
+    const title = item.querySelector('title')?.textContent?.trim() || '';
+    const url = item.querySelector('link')?.textContent?.trim() || '';
+    const desc = item.querySelector('description')?.textContent?.trim() || '';
+    if (title.length > 2 && url && !seen.has(url)) {
       seen.add(url);
-
-      // 提取描述（下一行或下两行的非空文本）
-      let desc = '';
-      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-        const nextLine = lines[j].trim();
-        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') && nextLine.length > 15) {
-          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
-          break;
-        }
-      }
-
-      if (title && title.length > 2 && !desc.startsWith('Sponsored')) {
-        results.push({ name: title, description: desc, url: url, stars: '🔍' });
-      }
+      results.push({ name: title, description: desc, url: url, stars: '🔍' });
     }
-  }
+  });
 
   if (results.length === 0) throw new Error('Bing: no results parsed');
   return { items: results, total_count: results.length };
 }
 
-// Bing中文搜索（使用中文关键词，替代无法通过代理的百度）
+// Bing中文搜索（使用RSS格式绕过CAPTCHA，用DOMParser解析XML）
 async function searchBingCN(chineseQuery) {
   if (!chineseQuery || chineseQuery.length < 2) throw new Error('BingCN: no Chinese query');
 
-  const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(chineseQuery)}&count=10&setlang=zh-CN&cc=CN`;
+  // 使用format=rss绕过Bing的CAPTCHA检测
+  const targetUrl = `https://www.bing.com/search?q=${encodeURIComponent(chineseQuery)}&count=10&format=rss&setlang=zh-CN&cc=CN`;
 
   let text = '';
   try {
-    text = await fetchViaProxy(targetUrl);
+    text = await fetchViaProxy(targetUrl, true);
   } catch(e) {
     console.warn('BingCN proxy failed:', e.message);
     throw new Error('Bing中文搜索失败');
   }
 
-  if (!text || text.length < 500) throw new Error('BingCN: empty response');
+  if (!text || text.length < 200) throw new Error('BingCN: empty response');
 
   const results = [];
-  const lines = text.split('\n');
   const seen = new Set();
 
-  for (let i = 0; i < lines.length && results.length < 8; i++) {
-    const line = lines[i];
-    const headingMatch = line.match(/^#{2,3}\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)/);
-    if (headingMatch) {
-      const title = headingMatch[1].replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
-      const url = headingMatch[2];
-      if (seen.has(url)) continue;
+  // 解析RSS XML
+  const doc = new DOMParser().parseFromString(text, 'text/xml');
+  const items = doc.querySelectorAll('item');
+  items.forEach(item => {
+    if (results.length >= 8) return;
+    const title = item.querySelector('title')?.textContent?.trim() || '';
+    const url = item.querySelector('link')?.textContent?.trim() || '';
+    const desc = item.querySelector('description')?.textContent?.trim() || '';
+    if (title.length > 2 && url && !seen.has(url)) {
       seen.add(url);
-
-      let desc = '';
-      for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
-        const nextLine = lines[j].trim();
-        if (nextLine && !nextLine.startsWith('#') && !nextLine.startsWith('![') && nextLine.length > 15) {
-          desc = nextLine.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
-          break;
-        }
-      }
-
-      if (title && title.length > 2 && !desc.startsWith('Sponsored')) {
-        results.push({ name: title, description: desc, url: url, stars: '🔍' });
-      }
+      results.push({ name: title, description: desc, url: url, stars: '🔍' });
     }
-  }
+  });
 
   if (results.length === 0) throw new Error('BingCN: no results parsed');
   return { items: results, total_count: results.length };
@@ -1274,80 +1280,237 @@ async function translateText(text) {
   throw new Error('Translation failed: ' + (data.responseDetails || 'unknown'));
 }
 
-// 从翻译后的英文文本提取搜索关键词
-function extractKeywordsFromEnglish(translatedText, originalDesc) {
-  // 1. 从翻译文本中提取有意义的英文词组
-  // 去除常见停用词
-  const stopWords = new Set(['a','an','the','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','can','to','of','in','on','at','by','for','with','about','as','into','like','through','after','over','between','out','against','during','without','before','under','around','among','and','but','or','nor','not','so','yet','both','either','neither','each','every','all','any','few','more','most','other','some','such','no','only','own','same','than','too','very','just','also','now','then','here','there','when','where','why','how','this','that','these','those','i','you','he','she','it','we','they','what','which','who','whom','whose','my','your','his','her','its','our','their','me','him','us','them','myself','yourself','himself','herself','itself','ourself','themselves','what','whatever','whoever','whomever']);
-
-  // 提取词组（2-3个连续有意义词）和单个长词
-  const words = translatedText.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1 && !stopWords.has(w));
-
-  // 也用概念映射补充（从原始中文描述）
-  const conceptMap = TOPIC_DATA.conceptMap || {};
-  const conceptTerms = [];
+// P1优化：最长匹配分词 — 按词长降序匹配，跳过已匹配区间，支持多次出现
+// 返回 [{cn, en, type, positions: [idx,...]}]
+function longestMatchConcepts(text, conceptMap) {
+  const lower = text.toLowerCase();
   const sortedKeys = Object.keys(conceptMap).sort((a, b) => b.length - a.length);
+  const matchedPositions = new Set();
+  const matched = [];
+
+  const techConcepts = ['语音识别','自然语言','AI','人工智能','区块链','IoT','物联网','AR','VR','数据可视化','机器学习','深度学习','大模型','计算机视觉','图像识别','目标检测','人脸识别','OCR','知识图谱','RAG','Agent','智能体','多模态','生成式','大语言模型','向量数据库','微调','提示词','嵌入','手势识别','表情识别','情感计算','脑机接口','语音助手','低代码','数字孪生','元宇宙','Web3','NFT','智能合约','去中心化','大数据','数据挖掘','微服务','容器','自动化','虚拟现实','增强现实','语音合成','语音转文字','文字转语音','机器翻译','情感分析','图像生成','视频生成','代码生成','边缘计算','联邦学习','差分隐私','区块链溯源'];
+  const domainConcepts = ['老年人','老人','适老','儿童','学生','乡村','盲人','聋','残障','无障碍','隐私','安全','环保','心理','情绪','压力','应急','灾害','法律','保险','税务','能源','制造','零售','影视','艺术','设计','建筑','出版','体育','科研','天文','生物','化学','地理','孕妇','婴儿','母婴','青少年','大学生','教师','医生','护士','农民','司机','外卖','快递','留学生','职场','远程办公','自由职业','创业者','公益','志愿','扶贫','社区','慈善','文化遗产','非遗','方言','古籍','博物馆','罕见病','多动症','溯源','供应链','仓储','冷链','考试','考研','留学','编程','代码','面试','打卡','签到','报销','审批','考勤','选课','抢票','投票','拍卖','租赁'];
+
   sortedKeys.forEach(cn => {
-    if (originalDesc.toLowerCase().includes(cn.toLowerCase())) {
-      conceptMap[cn].forEach(en => {
-        if (!conceptTerms.includes(en.toLowerCase())) conceptTerms.push(en.toLowerCase());
-      });
+    const cnLower = cn.toLowerCase();
+    let searchStart = 0;
+    let idx;
+    while ((idx = lower.indexOf(cnLower, searchStart)) >= 0) {
+      // 检查是否与已匹配的概念重叠
+      let overlap = false;
+      for (let i = idx; i < idx + cnLower.length; i++) {
+        if (matchedPositions.has(i)) { overlap = true; break; }
+      }
+      if (!overlap) {
+        for (let i = idx; i < idx + cnLower.length; i++) matchedPositions.add(i);
+        let type = 'feature';
+        if (techConcepts.includes(cn)) type = 'tech';
+        else if (domainConcepts.includes(cn)) type = 'domain';
+        matched.push({ cn, en: conceptMap[cn], type });
+      }
+      searchStart = idx + cnLower.length;
     }
   });
 
-  // 合并：优先用翻译API的词，补充概念映射的词
+  return matched;
+}
+
+// P1优化：从英文文本中提取有意义的短语（bigram + trigram + conceptMap短语）
+// 返回 [{phrase, score, source}] 按分数降序排列
+// source: 'concept' = conceptMap已知短语, 'trigram' = 三词短语, 'bigram' = 两词短语
+function extractEnglishPhrases(text, conceptMap) {
+  const stopWords = new Set(['a','an','the','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','can','to','of','in','on','at','by','for','with','about','as','into','like','through','after','over','between','out','against','during','without','before','under','around','among','and','but','or','nor','not','so','yet','both','either','neither','each','every','all','any','few','more','most','other','some','such','no','only','own','same','than','too','very','just','also','now','then','here','there','when','where','why','how','this','that','these','those','i','you','he','she','it','we','they','what','which','who','whom','whose','my','your','his','her','its','our','their','me','him','us','them','app','application','system','platform','tool','website','project','product','based','using','via','build','develop','create','make','use','new','one','two','automatically','also','then','well','way','many','much','some','any','all','both','each','few','more','most','other','some','such','no','only','own','same','than','too','very','just','now','then','here','there']);
+
+  // 动词/副词黑名单：这些词出现在trigram中间时，说明跨越了语义边界
+  const verbAdverbBlacklist = new Set(['generates','generating','created','creating','makes','making','uses','using','includes','including','contains','containing','provides','providing','allows','allowing','supports','supporting','enables','enabling','helps','helping','wants','wanting','needs','needing','understands','understanding','automatically','dynamically','simply','easily','quickly','directly']);
+
+  const lower = text.toLowerCase();
+  const candidates = [];
+  const seen = new Set();
+  const conceptPhrases = []; // 收集已检测到的conceptMap短语，用于后续子串过滤
+
+  // --- 1. conceptMap 已知多词短语检测（最高优先级，+100 bonus确保排名最高） ---
+  if (conceptMap) {
+    Object.values(conceptMap).flat().forEach(en => {
+      const enLower = en.toLowerCase();
+      if (enLower.includes(' ')) {
+        if (lower.includes(enLower)) {
+          const phraseWords = enLower.split(' ');
+          if (phraseWords.every(w => w.length > 1)) {
+            if (!seen.has(enLower)) {
+              seen.add(enLower);
+              conceptPhrases.push(enLower);
+              const score = phraseWords.length * 3 + enLower.replace(/\s/g, '').length + 100;
+              candidates.push({ phrase: enLower, score, source: 'concept', words: phraseWords });
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // --- 2. 按句子/分句切分，防止跨边界提取短语 ---
+  // 先按标点切分成子句，每个子句内单独提取ngram
+  const segments = lower.split(/[.,;:!?()\[\]{}\n\r]+/).map(s => s.trim()).filter(s => s.length > 5);
+
+  segments.forEach(segment => {
+    const segWords = segment.split(/[^a-z0-9]+/).filter(w => w.length > 1);
+    if (segWords.length < 2) return;
+
+    // --- 2-prep. 标记conceptMap短语在当前segment中的词位置 ---
+    // 被标记的位置不参与trigram/bigram提取，防止边界重叠
+    const conceptPositions = new Set(); // 被concept短语占用的词索引
+    conceptPhrases.forEach(cp => {
+      const cpWords = cp.split(' ');
+      // 在segWords中查找concept短语的所有出现位置
+      for (let i = 0; i <= segWords.length - cpWords.length; i++) {
+        let match = true;
+        for (let j = 0; j < cpWords.length; j++) {
+          if (segWords[i + j] !== cpWords[j]) { match = false; break; }
+        }
+        if (match) {
+          for (let j = 0; j < cpWords.length; j++) conceptPositions.add(i + j);
+        }
+      }
+    });
+
+    // --- 2a. Trigram 提取（三词短语） ---
+    for (let i = 0; i < segWords.length - 2; i++) {
+      const w1 = segWords[i], w2 = segWords[i + 1], w3 = segWords[i + 2];
+      // 跳过与concept短语重叠的trigram（位置级精确过滤）
+      if (conceptPositions.has(i) || conceptPositions.has(i + 1) || conceptPositions.has(i + 2)) continue;
+      const stopCount = [stopWords.has(w1), stopWords.has(w2), stopWords.has(w3)].filter(Boolean).length;
+      // 三个词中最多一个是停用词，且至少一个长度>4
+      if (stopCount <= 1 && (w1.length > 4 || w2.length > 4 || w3.length > 4)) {
+        // 排除中间词是动词/副词的trigram（跨越语义边界）
+        if (verbAdverbBlacklist.has(w2)) continue;
+        const phrase = w1 + ' ' + w2 + ' ' + w3;
+        if (!seen.has(phrase)) {
+          seen.add(phrase);
+          const nonStopCount = 3 - stopCount;
+          const score = (w1.length + w2.length + w3.length) + nonStopCount * 2;
+          candidates.push({ phrase, score, source: 'trigram', words: [w1, w2, w3] });
+        }
+      }
+    }
+
+    // --- 2b. Bigram 提取（两词短语） ---
+    for (let i = 0; i < segWords.length - 1; i++) {
+      const w1 = segWords[i], w2 = segWords[i + 1];
+      // 跳过与concept短语重叠的bigram
+      if (conceptPositions.has(i) || conceptPositions.has(i + 1)) continue;
+      if (!stopWords.has(w1) && !stopWords.has(w2) && (w1.length > 3 || w2.length > 3)) {
+        const phrase = w1 + ' ' + w2;
+        if (!seen.has(phrase)) {
+          seen.add(phrase);
+          const score = (w1.length + w2.length) + 2;
+          candidates.push({ phrase, score, source: 'bigram', words: [w1, w2] });
+        }
+      }
+    }
+  });
+
+  // --- 3. 去重：如果bigram是某个trigram/concept短语的子串，则移除 ---
+  const longPhrases = candidates.filter(c => c.words.length >= 3);
+  const result = candidates.filter(c => {
+    if (c.words.length >= 3) return true;
+    const isSubsumed = longPhrases.some(lp =>
+      lp.words.join(' ').includes(c.phrase)
+    );
+    return !isSubsumed;
+  });
+
+  // --- 4. 按分数降序排列 ---
+  result.sort((a, b) => b.score - a.score);
+
+  return result.map(r => r.phrase);
+}
+
+// 从翻译后的英文文本提取搜索关键词（P1优化：最长匹配+短语提取）
+function extractKeywordsFromEnglish(translatedText, originalDesc) {
+  const stopWords = new Set(['a','an','the','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','could','should','may','might','must','can','to','of','in','on','at','by','for','with','about','as','into','like','through','after','over','between','out','against','during','without','before','under','around','among','and','but','or','nor','not','so','yet','both','either','neither','each','every','all','any','few','more','most','other','some','such','no','only','own','same','than','too','very','just','also','now','then','here','there','when','where','why','how','this','that','these','those','i','you','he','she','it','we','they','what','which','who','whom','whose','my','your','his','her','its','our','their','me','him','us','them','myself','yourself','himself','herself','itself','ourself','themselves','what','whatever','whoever','whomever']);
+
+  // 1. P1优化：用最长匹配分词从中文原文提取概念（替代naive includes）
+  const conceptMap = TOPIC_DATA.conceptMap || {};
+  const matchedConcepts = longestMatchConcepts(originalDesc, conceptMap);
+  const groups = matchedConcepts.map(m => ({ cn: m.cn, en: m.en, type: m.type }));
+  const conceptTerms = [];
+  matchedConcepts.forEach(m => {
+    m.en.forEach(en => {
+      if (!conceptTerms.includes(en.toLowerCase())) conceptTerms.push(en.toLowerCase());
+    });
+  });
+
+  // 2. 从翻译文本提取单个有意义的词
+  const words = translatedText.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 1 && !stopWords.has(w));
+
+  // 3. P1优化：从翻译文本提取英文短语（bigram + trigram + conceptMap短语，按分数排序）
+  const phrases = extractEnglishPhrases(translatedText, conceptMap);
+
+  // 4. 合并所有词：翻译词 + 词典词
   const allTerms = [...new Set([...words.map(w => w.toLowerCase()), ...conceptTerms])];
 
-  // 构建搜索词：取翻译结果的前3个有意义词
-  let searchTerms = words.slice(0, 3);
-  // 如果不足，补充概念映射词
+  // 5. P1优化：构建搜索查询 — 优先使用排名最高的短语，补充单个词
+  let searchTerms = [];
+  let searchQuery = '';
+  let ghPhraseQueries = [];
+
+  if (phrases.length > 0) {
+    // 使用排名最高的短语作为主搜索词
+    const topPhrase = phrases[0];
+    searchTerms.push(topPhrase);
+    // 补充不属于短语的单词
+    const phraseWords = topPhrase.split(' ');
+    const extraWords = words.filter(w => !phraseWords.includes(w)).slice(0, 2);
+    searchTerms.push(...extraWords.slice(0, 2));
+  } else {
+    searchTerms = words.slice(0, 3);
+  }
+
+  // 如果翻译词不足，补充概念映射词
   if (searchTerms.length < 2 && conceptTerms.length > 0) {
     searchTerms = [...searchTerms, ...conceptTerms].slice(0, 3);
   }
 
-  const searchQuery = searchTerms.join(' ');
+  // 普通搜索查询（Bing等用空格拼接）
+  searchQuery = searchTerms.join(' ');
 
-  // 构建groups用于显示
-  const groups = sortedKeys
-    .filter(cn => originalDesc.toLowerCase().includes(cn.toLowerCase()))
-    .map(cn => ({ cn, en: conceptMap[cn] }));
+  // GitHub专用查询：多策略短语搜索（精准→宽泛）
+  if (phrases.length > 0) {
+    const phrase1 = phrases[0];
+    const phrase2 = phrases[1]; // 第二个短语（可能不存在）
+    const phrase1Words = phrase1.split(' ');
+    const remainingWords = words.filter(w => !phrase1Words.includes(w)).slice(0, 2);
 
-  return { groups, searchTerms, searchQuery, allTerms, translatedText };
+    // Q1: 最优短语 + 补充词（最精准）
+    if (remainingWords.length > 0) {
+      ghPhraseQueries.push(`"${phrase1}" ${remainingWords.join(' ')}`);
+    }
+    // Q2: 仅最优短语
+    ghPhraseQueries.push(`"${phrase1}"`);
+    // Q3: 第二短语（如果有且不同于第一短语）
+    if (phrase2 && phrase2 !== phrase1) {
+      ghPhraseQueries.push(`"${phrase2}"`);
+    }
+    // Q4: 拆词宽搜（去掉引号，用短语中的词 + 补充词）
+    ghPhraseQueries.push([...phrase1Words, ...remainingWords].slice(0, 3).join(' '));
+  } else {
+    // 无短语时，用原有逻辑
+    if (searchTerms.length >= 3) ghPhraseQueries.push(searchTerms.slice(0, 3).join(' '));
+    if (searchTerms.length >= 2) ghPhraseQueries.push(searchTerms.slice(0, 2).join(' '));
+    ghPhraseQueries.push(searchTerms[0] || conceptTerms[0] || '');
+  }
+
+  return { groups, searchTerms, searchQuery, allTerms, translatedText, phrases, ghPhraseQueries };
 }
 
-// 将中文描述按概念分组提取关键词，每组取第一个词构建精准搜索
+// 将中文描述按概念分组提取关键词（P1优化：使用共享最长匹配函数）
 function extractKeywordGroups(text) {
   const conceptMap = TOPIC_DATA.conceptMap || {};
-  const groups = []; // [{cn: '老年人', en: ['elderly','senior',...], type: 'domain'}]
 
-  // 概念分类：技术类关键词（不用于搜索，避免返回通用库）
-  const techConcepts = ['语音识别','自然语言','AI','人工智能','区块链','IoT','物联网','AR','VR','数据可视化','机器学习','深度学习'];
-  // 领域/用户类关键词
-  const domainConcepts = ['老年人','老人','适老','儿童','学生','乡村','盲人','聋','残障','无障碍','隐私','安全','环保','心理','情绪','压力','应急','灾害'];
-
-  // 按中文词长度降序排列，优先匹配更长的词（如"语音识别"优先于"语音"）
-  const sortedKeys = Object.keys(conceptMap).sort((a, b) => b.length - a.length);
-  const matchedSet = new Set(); // 已匹配的字符位置，避免重复匹配
-
-  sortedKeys.forEach(cn => {
-    const lower = text.toLowerCase();
-    const cnLower = cn.toLowerCase();
-    const idx = lower.indexOf(cnLower);
-    if (idx >= 0) {
-      // 检查是否与已匹配的概念重叠
-      let overlap = false;
-      for (let i = idx; i < idx + cnLower.length; i++) {
-        if (matchedSet.has(i)) { overlap = true; break; }
-      }
-      if (!overlap) {
-        for (let i = idx; i < idx + cnLower.length; i++) matchedSet.add(i);
-        let type = 'feature'; // 默认为功能类
-        if (techConcepts.includes(cn)) type = 'tech';
-        else if (domainConcepts.includes(cn)) type = 'domain';
-        groups.push({ cn, en: conceptMap[cn], type });
-      }
-    }
-  });
+  // P1优化：使用共享的最长匹配分词函数（支持多次出现+重叠检测）
+  const matchedConcepts = longestMatchConcepts(text, conceptMap);
+  const groups = matchedConcepts.map(m => ({ cn: m.cn, en: m.en, type: m.type }));
 
   // 构建搜索查询：优先使用 feature + domain 类关键词（找同类项目）
   // 避免使用 tech 类关键词（会返回通用代码库而非同类项目）
@@ -1368,7 +1531,49 @@ function extractKeywordGroups(text) {
   const searchQuery = searchTerms.join(' ');
   const allTerms = [...new Set(groups.flatMap(g => g.en))];
 
-  return { groups, searchTerms, searchQuery, allTerms, productTerms, techTerms };
+  // P1优化：从概念映射的英文词中检测多词短语 + 构建短语查询
+  // 1. 收集conceptMap中已知的多词英文短语（如 "speech recognition", "data visualization"）
+  const conceptPhrases = [];
+  groups.forEach(g => {
+    g.en.forEach(en => {
+      if (en.includes(' ') && en.split(' ').every(w => w.length > 1)) {
+        conceptPhrases.push(en.toLowerCase());
+      }
+    });
+  });
+
+  let ghPhraseQueries = [];
+  let phrases = [];
+
+  // 2. 优先使用conceptMap多词短语作为GitHub引号搜索
+  if (conceptPhrases.length > 0) {
+    phrases = conceptPhrases;
+    // Q1: 最优短语 + 补充词
+    const topPhrase = conceptPhrases[0];
+    const extraTerms = productTerms.filter(t => !topPhrase.includes(t)).slice(0, 1);
+    if (extraTerms.length > 0) {
+      ghPhraseQueries.push(`"${topPhrase}" ${extraTerms[0]}`);
+    }
+    // Q2: 仅最优短语
+    ghPhraseQueries.push(`"${topPhrase}"`);
+    // Q3: 第二短语（如果有）
+    if (conceptPhrases[1] && conceptPhrases[1] !== topPhrase) {
+      ghPhraseQueries.push(`"${conceptPhrases[1]}"`);
+    }
+  }
+
+  // 3. 如果没有多词短语，用产品词组合
+  if (ghPhraseQueries.length === 0 && productTerms.length >= 2) {
+    ghPhraseQueries.push(`${productTerms[0]} ${productTerms[1]}`);
+    phrases.push(`${productTerms[0]} ${productTerms[1]}`);
+  }
+
+  // 4. 兜底：宽泛搜索
+  if (searchTerms.length >= 3) ghPhraseQueries.push(searchTerms.slice(0, 3).join(' '));
+  if (searchTerms.length >= 2) ghPhraseQueries.push(searchTerms.slice(0, 2).join(' '));
+  ghPhraseQueries.push(searchTerms[0] || productTerms[0] || '');
+
+  return { groups, searchTerms, searchQuery, allTerms, productTerms, techTerms, ghPhraseQueries, phrases };
 }
 
 // 计算搜索结果命中百分比
@@ -2739,7 +2944,7 @@ function generatePitch() {
   showToast(t('pitch.success.generated'), 'success');
 }
 
-// 从用户描述中解析项目信息
+// P1优化：从用户描述中解析项目信息（接入 conceptMap + longestMatchConcepts）
 function parseProjectInfo(text) {
   const info = {
     targetUsers: '',
@@ -2748,23 +2953,52 @@ function parseProjectInfo(text) {
     tech: [],
     features: [],
     impact: '',
+    // P1新增：概念分类
+    techConcepts: [],   // 技术概念（如 语音识别、区块链、机器学习）
+    domainConcepts: [], // 领域概念（如 老年人、医疗、教育）
+    featureConcepts: [], // 功能概念（如 提醒、推荐、搜索）
+    allConcepts: [],    // 所有匹配的概念 {cn, en, type}
   };
 
-  // 提取目标用户
-  const userPatterns = [
-    /(?:目标用户[是为]?|面向|针对|帮助|服务)(.{2,20}?)(?:[的。，；;]|$)/,
-    /用户是(.{2,20}?)(?:[的。，；;]|$)/,
-    /为(.{2,15}?)(?:设计|开发|打造|提供|解决)/,
-  ];
-  for (const p of userPatterns) {
-    const m = text.match(p);
-    if (m && m[1] && m[1].length > 1 && m[1].length < 20) {
-      info.targetUsers = m[1].trim();
-      break;
+  const conceptMap = TOPIC_DATA.conceptMap || {};
+
+  // --- P1: 用 longestMatchConcepts 替代正则，从中文描述提取概念 ---
+  const matched = longestMatchConcepts(text, conceptMap);
+  info.allConcepts = matched;
+  matched.forEach(m => {
+    if (m.type === 'tech') {
+      if (!info.techConcepts.includes(m.cn)) info.techConcepts.push(m.cn);
+      m.en.forEach(en => { if (!info.tech.includes(en)) info.tech.push(en); });
+    } else if (m.type === 'domain') {
+      if (!info.domainConcepts.includes(m.cn)) info.domainConcepts.push(m.cn);
+      // 领域概念中的人群词作为目标用户
+      const peopleWords = ['老年人','老人','儿童','学生','乡村','盲人','聋','残障','孕妇','婴儿','母婴','青少年','大学生','教师','医生','护士','农民','司机','外卖','快递','留学生','创业者'];
+      if (peopleWords.includes(m.cn) && !info.targetUsers) {
+        info.targetUsers = m.cn;
+      }
+    } else {
+      if (!info.featureConcepts.includes(m.cn)) info.featureConcepts.push(m.cn);
+    }
+  });
+
+  // --- 保留正则提取作为补充（conceptMap 覆盖不到的句式信息） ---
+  // 提取目标用户（正则补充，处理 conceptMap 未覆盖的表述）
+  if (!info.targetUsers) {
+    const userPatterns = [
+      /(?:目标用户[是为]?|面向|针对|帮助|服务)(.{2,20}?)(?:[的。，；;]|$)/,
+      /用户是(.{2,20}?)(?:[的。，；;]|$)/,
+      /为(.{2,15}?)(?:设计|开发|打造|提供|解决)/,
+    ];
+    for (const p of userPatterns) {
+      const m = text.match(p);
+      if (m && m[1] && m[1].length > 1 && m[1].length < 20) {
+        info.targetUsers = m[1].trim();
+        break;
+      }
     }
   }
 
-  // 提取问题
+  // 提取问题（正则保留，conceptMap 不覆盖问题句式）
   const problemPatterns = [
     /(?:问题|痛点|困难|挑战|难点|不足|缺乏|无法|不能|难以)(.{5,50}?)(?:。|，|；|;|$)/,
     /(?:面临|遇到|存在)(.{5,40}?)(?:的|问题|困难|挑战)/,
@@ -2777,22 +3011,23 @@ function parseProjectInfo(text) {
     }
   }
 
-  // 提取技术栈
-  const techKeywords = ['React', 'Vue', 'Next.js', 'Angular', 'FastAPI', 'Express', 'Flask', 'Django',
-    'OpenAI', 'Claude', 'GPT', 'AI', '语音识别', 'NLP', '机器学习', '深度学习',
-    'Firebase', 'Supabase', 'PostgreSQL', 'MongoDB', 'SQLite',
-    'Vercel', 'Netlify', 'Docker', 'LangChain', 'AR', 'VR', 'IoT', '区块链'];
-  techKeywords.forEach(t => {
-    if (text.includes(t)) info.tech.push(t);
+  // P1: 技术栈检测 — 从 conceptMap 已提取的英文技术词 + 补充常见技术栈名
+  // conceptMap 已处理了大部分，这里补充 AppState 和英文技术名
+  const extraTechKeywords = ['React', 'Vue', 'Next.js', 'Angular', 'FastAPI', 'Express', 'Flask', 'Django',
+    'OpenAI', 'Claude', 'GPT', 'Firebase', 'Supabase', 'PostgreSQL', 'MongoDB', 'SQLite',
+    'Vercel', 'Netlify', 'Docker', 'LangChain', 'TensorFlow', 'PyTorch', 'Flutter',
+    'TypeScript', 'Node.js', 'Electron', 'Rust', 'Go'];
+  extraTechKeywords.forEach(t => {
+    if (text.includes(t) && !info.tech.includes(t)) info.tech.push(t);
   });
-  // 也从AppState补充（仅当用户描述中没有提到技术时）
-  if (info.tech.length === 0 && AppState.tech.selected.length > 0) {
+  // 从AppState补充
+  if (AppState.tech && AppState.tech.selected) {
     AppState.tech.selected.forEach(t => {
       if (!info.tech.includes(t)) info.tech.push(t);
     });
   }
 
-  // 提取功能
+  // 提取功能（正则保留 + conceptMap 功能概念补充）
   const featurePatterns = [
     /(?:功能|实现|支持|提供|包括|包含)(.{5,40}?)(?:。|，|；|;|$)/g,
     /(?:可以|能够|能)(.{3,30}?)(?:。|，|；|;|$)/g,
@@ -2803,8 +3038,120 @@ function parseProjectInfo(text) {
       if (m[1] && m[1].length > 3) info.features.push(m[1].trim());
     }
   }
+  // 用 conceptMap 功能概念补充
+  if (info.features.length < 3 && info.featureConcepts.length > 0) {
+    info.featureConcepts.forEach(fc => {
+      if (info.features.length < 5 && !info.features.includes(fc)) {
+        info.features.push(fc);
+      }
+    });
+  }
 
   return info;
+}
+
+// P2新增：分析项目描述质量（4W覆盖 + 具体度 + 概念密度）
+// 返回 { score, dimensions, missing, specificity, conceptDensity, details }
+function analyzeDescQuality(desc, parsed) {
+  const result = {
+    score: 0,           // 0-100 总质量分
+    dimensions: {},     // 各维度覆盖情况 { problem, solution, user, tech }
+    missing: [],        // 缺失维度名称
+    specificity: 0,     // 0-100 具体度
+    conceptDensity: 0,  // 0-100 概念密度
+    details: [],        // 具体问题列表
+  };
+
+  if (!desc || desc.length < 10) {
+    result.details.push('描述过短（少于10字），无法分析');
+    result.missing = ['problem', 'solution', 'user', 'tech'];
+    return result;
+  }
+
+  // --- 1. 4W维度覆盖检测 ---
+  // Problem: 是否包含痛点描述
+  const hasProblem = parsed.problem ||
+    /问题|痛点|困难|挑战|难点|不足|缺乏|无法|不能|难以|面临|遇到|存在/.test(desc);
+  result.dimensions.problem = hasProblem ? 1 : 0;
+  if (!hasProblem) {
+    result.missing.push('problem');
+    result.details.push('缺少痛点描述：未检测到"问题/痛点/困难"等关键词');
+  }
+
+  // Solution: 是否包含解决方案（功能/技术实现）
+  const hasSolution = (parsed.features.length > 0) ||
+    /功能|实现|支持|提供|包括|包含|可以|能够|通过|利用|使用|结合/.test(desc);
+  result.dimensions.solution = hasSolution ? 1 : 0;
+  if (!hasSolution) {
+    result.missing.push('solution');
+    result.details.push('缺少方案描述：未检测到功能/实现/通过/利用等关键词');
+  }
+
+  // User: 是否包含目标用户
+  const hasUser = parsed.targetUsers ||
+    parsed.domainConcepts.length > 0 ||
+    /用户|面向|针对|帮助|为|人群|老人|儿童|学生|医生|农民/.test(desc);
+  result.dimensions.user = hasUser ? 1 : 0;
+  if (!hasUser) {
+    result.missing.push('user');
+    result.details.push('缺少目标用户：未检测到人群/用户相关描述');
+  }
+
+  // Tech: 是否包含技术方案
+  const hasTech = parsed.tech.length > 0 || parsed.techConcepts.length > 0;
+  result.dimensions.tech = hasTech ? 1 : 0;
+  if (!hasTech) {
+    result.missing.push('tech');
+    result.details.push('缺少技术方案：未检测到任何技术栈或技术概念');
+  }
+
+  // --- 2. 具体度评分 ---
+  let specScore = 50; // 基础分
+  // 扣分：模糊短语
+  const vaguePhrases = ['解决实际问题', '提升效率', '改善体验', '提供便利', '帮助用户', '实现功能', '满足需求', '提高质量', '优化流程', '解决问题'];
+  vaguePhrases.forEach(v => {
+    if (desc.includes(v)) {
+      specScore -= 8;
+      result.details.push(`表述模糊：包含"${v}"，建议用具体场景替代`);
+    }
+  });
+  // 加分：数字/数据
+  const numbers = desc.match(/\d+/g);
+  if (numbers) {
+    specScore += numbers.length * 5;
+    result.details.push(`包含${numbers.length}处数据，增强了说服力`);
+  }
+  // 加分：具体场景词
+  const sceneWords = ['医院', '学校', '家庭', '农村', '社区', '工厂', '街道', '超市', '公园', '地铁', '机场', '酒店', '餐厅', '工地', '田间', '考场', '办公室'];
+  const matchedScenes = sceneWords.filter(s => desc.includes(s));
+  if (matchedScenes.length > 0) {
+    specScore += matchedScenes.length * 6;
+    result.details.push(`包含具体场景（${matchedScenes.join('、')}），增强了代入感`);
+  }
+  // 加分：描述长度（信息量）
+  if (desc.length > 100) specScore += 8;
+  if (desc.length > 200) specScore += 5;
+  // 加分：conceptMap 命中数
+  if (parsed.allConcepts.length >= 5) {
+    specScore += 10;
+    result.details.push(`概念丰富：检测到${parsed.allConcepts.length}个专业概念`);
+  }
+
+  result.specificity = Math.max(0, Math.min(100, specScore));
+
+  // --- 3. 概念密度 ---
+  const conceptCount = parsed.allConcepts.length;
+  const textLength = Math.max(1, desc.length);
+  // 概念密度 = 概念数 / (文本长度/50)，归一化到0-100
+  result.conceptDensity = Math.max(0, Math.min(100, Math.round((conceptCount / (textLength / 50)) * 100)));
+
+  // --- 4. 总分 ---
+  const dimScore = (4 - result.missing.length) * 20; // 维度覆盖 0-80
+  const specPart = Math.round(result.specificity * 0.15); // 具体度贡献 0-15
+  const densityPart = Math.round(result.conceptDensity * 0.05); // 密度贡献 0-5
+  result.score = Math.max(0, Math.min(100, dimScore + specPart + densityPart));
+
+  return result;
 }
 
 // 根据用户输入生成个性化 pitch 各段落
@@ -2885,8 +3232,13 @@ function generatePitchSections(ctx, info) {
   }
   // 技术创新点
   const aiTech = info.tech.find(t => ['OpenAI API','Claude API','Together AI','LangChain'].includes(t));
-  if (aiTech) {
+  const aiConcepts = info.techConcepts ? info.techConcepts.filter(c => ['AI','人工智能','机器学习','深度学习','大模型','大语言模型','计算机视觉','自然语言','语音识别','图像识别','知识图谱','RAG','Agent','智能体','多模态','生成式'].includes(c)) : [];
+  if (aiConcepts.length > 0) {
+    techContent += `<p><strong>创新点：</strong>将${aiConcepts.slice(0, 2).join('与')}深度融入业务场景，不是简单的API套壳，而是针对${users}的需求做了定制化优化。</p>`;
+  } else if (aiTech) {
     techContent += `<p><strong>创新点：</strong>将 ${aiTech} 深度融入业务场景，不是简单的API套壳，而是针对${users}的需求做了定制化优化。</p>`;
+  } else if (info.techConcepts && info.techConcepts.length >= 2) {
+    techContent += `<p><strong>创新点：</strong>结合${info.techConcepts.slice(0, 2).join('与')}技术，在 ${ctx.duration} 小时内完成了从设计到部署的完整流程。</p>`;
   } else {
     techContent += `<p><strong>创新点：</strong>在 ${ctx.duration} 小时内完成了从设计到部署的完整流程，技术选型兼顾了开发效率和产品质量。</p>`;
   }
@@ -3057,6 +3409,9 @@ function autoReview() {
   const parsed = parseProjectInfo(desc + ' ' + projectInfo.topicDesc);
   projectInfo.techStack = [...new Set([...projectInfo.techStack, ...parsed.tech])];
 
+  // P2: 分析描述质量
+  const quality = analyzeDescQuality(desc + ' ' + projectInfo.topicDesc, parsed);
+
   // 为每个 agent 的每个 criterion 自动评分并生成反馈
   const ratings = {};
   const feedbacks = {};
@@ -3066,7 +3421,7 @@ function autoReview() {
     feedbacks[agent.id] = {};
 
     agent.criteria.forEach(criterion => {
-      const result = evaluateCriterion(agent.id, criterion, projectInfo, parsed);
+      const result = evaluateCriterion(agent.id, criterion, projectInfo, parsed, quality);
       ratings[agent.id][criterion.id] = result.score;
       feedbacks[agent.id][criterion.id] = result.feedback;
     });
@@ -3087,11 +3442,12 @@ function autoReview() {
 }
 
 // 根据项目信息评估单个评审标准
-function evaluateCriterion(agentId, criterion, info, parsed) {
+function evaluateCriterion(agentId, criterion, info, parsed, quality) {
   let score = 3; // 默认中等
   let feedback = '';
   const allText = (info.desc + ' ' + info.topicDesc).toLowerCase();
   const hasTech = (techName) => info.techStack.some(t => t.toLowerCase().includes(techName.toLowerCase()));
+  const q = quality || { score: 50, specificity: 50, conceptDensity: 50, missing: [], details: [] };
 
   switch(criterion.id) {
     // === 代码质量评审员 ===
@@ -3101,14 +3457,17 @@ function evaluateCriterion(agentId, criterion, info, parsed) {
       else { score = 2; feedback = fb('技术栈单一，代码可能集中在少数文件中。建议拆分模块，提高可维护性。', 'Single tech stack, code may be concentrated in few files. Split modules for maintainability.'); }
       break;
     case 'readability':
-      score = 3; feedback = fb('建议使用有意义的变量名和函数名，避免缩写。关键业务逻辑应添加注释。', 'Use meaningful variable and function names, avoid abbreviations. Add comments for key business logic.');
+      if (q.specificity >= 70) { score = 4; feedback = fb('描述具体清晰，代码可读性意识较好。建议使用有意义的变量名，关键业务逻辑添加注释。', 'Description is specific and clear. Use meaningful variable names and add comments for key logic.'); }
+      else if (q.specificity < 35) { score = 2; feedback = fb('描述偏模糊，代码可读性风险较高。建议先明确功能细节，再编写清晰变量名和注释。', 'Description is vague, code readability at risk. Clarify feature details first, then use clear naming and comments.'); }
+      else { score = 3; feedback = fb('建议使用有意义的变量名和函数名，避免缩写。关键业务逻辑应添加注释。', 'Use meaningful variable and function names, avoid abbreviations. Add comments for key business logic.'); }
       break;
     case 'error_handling':
       if (hasTech('FastAPI') || hasTech('Express') || hasTech('Flask') || hasTech('Django')) { score = 3; feedback = fb('使用了后端框架，建议为API接口添加try-catch和统一的错误响应格式。', 'Using backend framework. Add try-catch and unified error response format for API endpoints.'); }
       else { score = 2; feedback = fb('未检测到后端框架，错误处理可能不足。建议至少在前端添加全局错误捕获。', 'No backend framework detected, error handling may be insufficient. Add global error catching on frontend at least.'); }
       break;
     case 'comments':
-      score = 3; feedback = fb('黑客松项目中注释容易被忽略，建议至少为核心算法和API接口添加注释。', 'Comments are often skipped in hackathons. Add comments for core algorithms and API endpoints at least.');
+      if (q.specificity >= 65) { score = 4; feedback = fb('描述信息量充足，注释意识应较好。建议至少为核心算法和API接口添加注释。', 'Sufficient detail in description. Add comments for core algorithms and API endpoints.'); }
+      else { score = 3; feedback = fb('黑客松项目中注释容易被忽略，建议至少为核心算法和API接口添加注释。', 'Comments are often skipped in hackathons. Add comments for core algorithms and API endpoints at least.'); }
       break;
     case 'no_hardcode':
       if (info.devFindings && info.devFindings.secrets && info.devFindings.secrets.length > 0) {
@@ -3150,7 +3509,10 @@ function evaluateCriterion(agentId, criterion, info, parsed) {
       score = 3; feedback = fb('建议统一配色方案（不超过3种主色）、字体（不超过2种）和组件风格。', 'Unify color scheme (max 3 primary colors), fonts (max 2), and component styles.');
       break;
     case 'accessibility':
-      if (allText.includes('无障碍') || allText.includes('适老') || allText.includes('accessibility') || allText.includes('a11y')) { score = 5; feedback = fb('✅ 项目描述中提到了无障碍/适老化，这是极大的加分项！确保实现大字体、高对比度、语音辅助等功能。', '✅ Project mentions accessibility/elderly-friendly design, a huge bonus! Ensure large fonts, high contrast, voice assistance.'); }
+      const a11yConcepts = parsed.domainConcepts.filter(d => ['老年人','老人','适老','盲人','聋','残障','无障碍'].includes(d));
+      if (a11yConcepts.length >= 2) { score = 5; feedback = fb(`✅ 项目包含多个无障碍概念（${a11yConcepts.join('、')}），极大的加分项！确保实现大字体、高对比度、语音辅助。`, `✅ Multiple accessibility concepts (${a11yConcepts.join(', ')}), huge bonus! Ensure large fonts, high contrast, voice assistance.`); }
+      else if (a11yConcepts.length >= 1 || allText.includes('无障碍') || allText.includes('适老') || allText.includes('accessibility') || allText.includes('a11y')) { score = 5; feedback = fb('✅ 项目描述中提到了无障碍/适老化，这是极大的加分项！确保实现大字体、高对比度、语音辅助等功能。', '✅ Project mentions accessibility/elderly-friendly design, a huge bonus! Ensure large fonts, high contrast, voice assistance.'); }
+      else if (parsed.domainConcepts.includes('儿童') || parsed.domainConcepts.includes('学生')) { score = 4; feedback = fb('面向儿童/学生，建议考虑 simplified UI and parental controls for accessibility.', 'Targeting children/students, consider simplified UI and parental controls for accessibility.'); }
       else { score = 2; feedback = fb('未检测到无障碍设计考量。建议至少添加alt文本、ARIA标签和键盘导航支持。', 'No accessibility considerations detected. Add alt text, ARIA labels, and keyboard navigation support at minimum.'); }
       break;
     case 'empty_state':
@@ -3173,29 +3535,43 @@ function evaluateCriterion(agentId, criterion, info, parsed) {
       break;
     case 'ai_integration':
       const aiTechs = info.techStack.filter(t => ['OpenAI API','Claude API','Together AI','LangChain','Hugging Face','OpenAI'].some(n => t.includes(n)));
-      if (aiTechs.length >= 2) { score = 5; feedback = tf('review.ai.multi', {count: aiTechs.length, names: aiTechs.join('、')}); }
+      const aiConcepts = parsed.techConcepts.filter(c => ['AI','人工智能','机器学习','深度学习','大模型','大语言模型','计算机视觉','自然语言','语音识别','图像识别','知识图谱','RAG','Agent','智能体','多模态','生成式','向量数据库','微调','OCR','目标检测','人脸识别','情感分析','图像生成','视频生成','代码生成','联邦学习'].includes(c));
+      if (aiConcepts.length >= 3) { score = 5; feedback = fb(`AI技术深度好（${aiConcepts.join('、')}），建议在Pitch中突出AI创新点。`, `Strong AI depth (${aiConcepts.join(', ')}). Highlight AI innovation in pitch.`); }
+      else if (aiTechs.length >= 2) { score = 5; feedback = tf('review.ai.multi', {count: aiTechs.length, names: aiTechs.join('、')}); }
+      else if (aiConcepts.length >= 1) { score = 4; feedback = fb(`检测到AI概念（${aiConcepts.join('、')}），建议深化集成而非简单调用API。`, `AI concepts detected (${aiConcepts.join(', ')}). Deepen integration rather than simple API calls.`); }
       else if (aiTechs.length === 1) { score = 3; feedback = tf('review.ai.single', {name: aiTechs[0]}); }
       else if (allText.includes('ai') || allText.includes('人工智能')) { score = 2; feedback = t('review.ai.mentioned'); }
       else { score = 3; feedback = t('review.ai.none'); }
       break;
     case 'problem_fitting':
-      if (info.desc && info.desc.length > 50) { score = 4; feedback = t('review.problem.good'); }
-      else { score = 3; feedback = t('review.problem.weak'); }
+      if (q.missing.includes('problem') && q.missing.includes('solution')) { score = 2; feedback = fb('描述中缺少痛点和方案描述，评委难以判断问题匹配度。建议补充"解决什么问题"和"用什么方案"。', 'Missing problem and solution in description. Judges cannot assess problem fit. Add what problem and what solution.'); }
+      else if (q.missing.includes('problem')) { score = 3; feedback = fb('描述中缺少明确的痛点描述。建议补充具体问题场景，如"60%老人忘记服药"。', 'Missing clear problem statement. Add specific problem scenario, e.g., "60% of elderly forget medications".'); }
+      else if (q.specificity >= 65) { score = 5; feedback = fb('问题描述具体，方案匹配度高。建议在Pitch中用数据强化问题严重性。', 'Problem described specifically, solution fits well. Use data in pitch to emphasize severity.'); }
+      else { score = 4; feedback = fb('问题与方案匹配度较好。建议补充更多具体场景描述以提升说服力。', 'Good problem-solution fit. Add more specific scenarios to improve persuasiveness.'); }
       break;
     case 'scalability':
-      score = 3; feedback = t('review.scalability');
+      if (q.conceptDensity >= 60 && parsed.techConcepts.length >= 3) { score = 4; feedback = fb(`检测到${parsed.techConcepts.length}个技术概念，扩展性好。建议在Pitch中说明如何扩展到更多场景。`, `Detected ${parsed.techConcepts.length} tech concepts, good extensibility. Explain how to expand to more scenarios in pitch.`); }
+      else if (parsed.domainConcepts.length >= 2) { score = 4; feedback = fb(`覆盖${parsed.domainConcepts.length}个领域，有横向扩展潜力。建议说明可复用到哪些相邻场景。`, `Covers ${parsed.domainConcepts.length} domains, good horizontal potential. Explain which adjacent scenarios it can extend to.`); }
+      else { score = 3; feedback = fb('建议考虑项目可扩展性：能否服务更多用户？能否拓展到相邻领域？', 'Consider scalability: can it serve more users? Can it extend to adjacent domains?'); }
       break;
     case 'tech_combination':
-      if (info.techStack.length >= 5) { score = 4; feedback = tf('review.techcombo.rich', {count: info.techStack.length, duration: info.duration}); }
+      if (parsed.techConcepts.length >= 4) { score = 5; feedback = fb(`技术组合丰富（${parsed.techConcepts.join('、')}），创新潜力大。${info.duration}小时内需聚焦核心组合。`, `Rich tech combination (${parsed.techConcepts.join(', ')}), high innovation potential. Focus on core combo in ${info.duration}h.`); }
+      else if (info.techStack.length >= 5) { score = 4; feedback = tf('review.techcombo.rich', {count: info.techStack.length, duration: info.duration}); }
       else if (info.techStack.length >= 3) { score = 3; feedback = t('review.techcombo.mid'); }
       else { score = 3; feedback = t('review.techcombo.minimal'); }
       break;
     case 'user_insight':
-      if (parsed.targetUsers && info.desc.length > 50) { score = 4; feedback = tf('review.userinsight.good', {users: parsed.targetUsers}); }
-      else { score = 3; feedback = t('review.userinsight.weak'); }
+      if (q.missing.includes('user')) { score = 2; feedback = fb('未检测到目标用户描述。建议明确"为谁解决"——补充人群特征和使用场景。', 'No target user detected. Clarify "for whom" — add user characteristics and usage scenarios.'); }
+      else if (parsed.targetUsers && q.specificity >= 60) { score = 5; feedback = fb(`目标用户"${parsed.targetUsers}"明确，描述具体。建议在Pitch中用用户故事展示洞察深度。`, `Target user "${parsed.targetUsers}" is clear and specific. Use user stories in pitch to show insight depth.`); }
+      else if (parsed.targetUsers) { score = 4; feedback = fb(`项目面向"${parsed.targetUsers}"，用户洞察较好。建议补充该群体的具体使用场景。`, `Project targets "${parsed.targetUsers}", good user insight. Add specific usage scenarios for this group.`); }
+      else { score = 3; feedback = fb('建议更明确地描述目标用户群体及其使用场景。', 'Describe target user groups and their usage scenarios more clearly.'); }
       break;
     case 'market_potential':
-      if (allText.includes('老年人') || allText.includes('无障碍') || allText.includes('环保') || allText.includes('乡村') || allText.includes('残障') || allText.includes('心理')) { score = 5; feedback = t('review.social.strong'); }
+      const socialGoodDomains = ['老年人','老人','儿童','乡村','盲人','聋','残障','无障碍','环保','心理','情绪','压力','应急','灾害','公益','志愿','扶贫','社区','慈善','罕见病','孕妇','婴儿','母婴'];
+      const matchedSocial = parsed.domainConcepts.filter(d => socialGoodDomains.includes(d));
+      if (matchedSocial.length >= 3) { score = 5; feedback = fb(`项目具有强社会价值（${matchedSocial.join('、')}），蓝海方向明确。`, `Strong social value (${matchedSocial.join(', ')}), clear blue ocean direction.`); }
+      else if (matchedSocial.length >= 1 || allText.includes('老年人') || allText.includes('无障碍') || allText.includes('环保') || allText.includes('乡村') || allText.includes('残障') || allText.includes('心理')) { score = 5; feedback = t('review.social.strong'); }
+      else if (parsed.domainConcepts.length >= 2) { score = 4; feedback = fb(`覆盖${parsed.domainConcepts.length}个领域，有一定市场潜力。`, `Covers ${parsed.domainConcepts.length} domains, has some market potential.`); }
       else { score = 3; feedback = t('review.social.week'); }
       break;
 
@@ -3248,11 +3624,15 @@ function evaluateCriterion(agentId, criterion, info, parsed) {
       else { score = 3; feedback = fb('建议设计清晰的演示流程，提前准备好演示数据，只展示最核心的功能。', 'Design a clear demo flow. Prepare demo data in advance. Only show the most core features.'); }
       break;
     case 'problem_statement':
-      if (info.desc && info.desc.includes('问题') && info.desc.length > 50) { score = 4; feedback = fb('项目描述中清晰阐述了问题。建议在Pitch中用数据或用户故事强化问题严重性。', 'Problem clearly described. Use data or user stories in pitch to emphasize problem severity.'); }
-      else { score = 3; feedback = fb('建议在Pitch中用具体数据（如"60%的老人忘记服药"）说明问题的严重性。', 'Use specific data (e.g., "60% of elderly forget medications") to convey problem severity in pitch.'); }
+      if (q.missing.includes('problem')) { score = 2; feedback = fb('描述中缺少问题陈述。建议用"X%的用户面临Y问题"格式开头，让评委立刻理解痛点。', 'Missing problem statement. Start with "X% of users face Y problem" to help judges understand the pain point immediately.'); }
+      else if (q.specificity >= 65 && /问题|痛点|困难|挑战/.test(info.desc)) { score = 5; feedback = fb('问题陈述清晰且具体。建议在Pitch中用数据或用户故事强化问题严重性。', 'Problem statement is clear and specific. Use data or user stories in pitch to emphasize severity.'); }
+      else if (/问题|痛点|困难|挑战/.test(info.desc)) { score = 4; feedback = fb('项目描述中阐述了问题。建议补充具体数据（如"60%的老人忘记服药"）增强说服力。', 'Problem described. Add specific data (e.g., "60% of elderly forget medications") to strengthen persuasiveness.'); }
+      else { score = 3; feedback = fb('建议在Pitch中用具体数据说明问题的严重性和紧迫性。', 'Use specific data in pitch to convey problem severity and urgency.'); }
       break;
     case 'solution_clarity':
-      if (info.oneLiner && info.desc && info.desc.length > 50) { score = 4; feedback = fb('项目描述清晰，解决方案明确。建议在Pitch中用"问题→方案→效果"的逻辑展开。', 'Clear description and solution. Structure pitch as "problem→solution→impact".'); }
+      if (q.missing.includes('solution')) { score = 2; feedback = fb('描述中缺少解决方案。建议用"通过[技术/方法]实现[功能]，解决[问题]"格式补充。', 'Missing solution in description. Add using format: "Solve [problem] by [tech/method] implementing [feature]".'); }
+      else if (q.specificity >= 65) { score = 5; feedback = fb('解决方案清晰且具体。建议在Pitch中用"问题→方案→效果"的逻辑展开。', 'Solution is clear and specific. Structure pitch as "problem→solution→impact".'); }
+      else if (info.oneLiner && info.desc && info.desc.length > 50) { score = 4; feedback = fb('项目描述较清晰，解决方案明确。建议在Pitch中用"问题→方案→效果"的逻辑展开。', 'Clear description and solution. Structure pitch as "problem→solution→impact".'); }
       else { score = 3; feedback = fb('建议更清晰地说明解决方案的核心创新点，让评委一听就懂。', 'Clarify the core innovation of your solution so judges understand immediately.'); }
       break;
     case 'visual_aid':
