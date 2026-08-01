@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>HackAI unit tests</title>
+<style>body{font-family:monospace;background:#111;color:#ddd;padding:20px}</style></head>
+<body>
+<h3>js/ai.js 纯函数测试（零依赖）</h3>
+<pre id="out">loading...</pre>
+<script src="../js/ai.js?v=1"></script>
+<script>
+const out = []; let failed = 0;
+function assert(name, cond) { out.push((cond ? 'PASS' : 'FAIL') + '  ' + name); if (!cond) failed++; }
+try {
+  const T = window.HackAI._internal.TASKS;
+
+  // ---- understand schema ----
+  const goodU = { summary:'s', target_user:'u', core_scenario:'c',
+    search_query_en:'a b', search_query_zh:'甲乙',
+    github_queries:['"a b"'], key_terms:['a','甲'] };
+  assert('understand: 合法数据通过', T.understand.valid(goodU));
+  assert('understand: key_terms 为空拒绝', !T.understand.valid({ ...goodU, key_terms: [] }));
+  assert('understand: github_queries 非数组拒绝', !T.understand.valid({ ...goodU, github_queries: 'x' }));
+  assert('understand: 缺 summary 拒绝', !T.understand.valid({ ...goodU, summary: '' }));
+
+  // ---- assess schema ----
+  const goodA = { results:[{index:0,relevant:true,reason:'r'}], hit_ratio:0.4,
+    matched_patterns:[{id:'todo_app',match_ratio:0.8,reason:'r'}],
+    matched_boosters:['elderly'],
+    social_demand:{level:'strong',reason:'r'},
+    feasibility:70, demand_strength:60, differentiation_space:50 };
+  assert('assess: 合法数据通过', T.assess.valid(goodA));
+  assert('assess: hit_ratio 超界拒绝', !T.assess.valid({ ...goodA, hit_ratio: 1.5 }));
+  assert('assess: 非法 level 拒绝', !T.assess.valid({ ...goodA, social_demand:{level:'huge',reason:''} }));
+  assert('assess: feasibility 非数字拒绝', !T.assess.valid({ ...goodA, feasibility:'high' }));
+
+  // ---- advise schema ----
+  const goodC = { score_advice:[
+      {dimension:'originality',why:'w',how:'h'},
+      {dimension:'scarcity',why:'w',how:'h'},
+      {dimension:'meaning',why:'w',how:'h'}],
+    differentiation:['d1'], blue_ocean:[{direction:'银发经济科技',why:'w'}] };
+  assert('advise: 合法数据通过', T.advise.valid(goodC));
+  assert('advise: score_advice 不足3条拒绝', !T.advise.valid({ ...goodC, score_advice: goodC.score_advice.slice(0,2) }));
+  assert('advise: blue_ocean 缺 why 拒绝', !T.advise.valid({ ...goodC, blue_ocean:[{direction:'x'}] }));
+
+  // ---- radar geometry ----
+  const pts = window.HackAI.computeRadarPoints([100,100,100,100,100,100], 260, 100);
+  assert('radar: 6轴返回6点', pts.length === 6);
+  assert('radar: 第一点在正上方 (130,30)', Math.abs(pts[0].x-130)<1e-6 && Math.abs(pts[0].y-30)<1e-6);
+  const zero = window.HackAI.computeRadarPoints([0,0,0], 260, 100);
+  assert('radar: 0 值收缩到圆心', zero.every(p => Math.abs(p.x-130)<1e-6 && Math.abs(p.y-130)<1e-6));
+  assert('radar: >100 被夹紧到 100', Math.abs(window.HackAI.computeRadarPoints([200],260,100)[0].y - 30) < 1e-6);
+  assert('radar: 负值被夹紧到 0', Math.abs(window.HackAI.computeRadarPoints([-5],260,100)[0].y - 130) < 1e-6);
+
+  // ---- hashStr ----
+  const h = window.HackAI._internal.hashStr;
+  assert('hash: 同输入同输出', h('abc') === h('abc'));
+  assert('hash: 不同输入不同输出', h('abc') !== h('abd'));
+} catch (e) {
+  out.push('CRASH: ' + e.message); failed++;
+}
+document.getElementById('out').textContent =
+  out.join('\n') + '\n\n' + (failed ? failed + ' FAILED ❌' : 'ALL PASS ✅');
+</script>
+</body>
+</html>
