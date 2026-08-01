@@ -35,24 +35,26 @@ async function handleTopicSearch() {
   // 简洁的加载提示
   $('#searchStatus').innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>' + t('topic.loading') + '</span></div>';
 
-  // 1. 后台翻译（不向用户展示翻译过程）
-  let translatedText = '';
-  let translationSource = 'conceptMap';
-  try {
-    translatedText = await translateText(desc);
-    if (translatedText && translatedText.length > 3) {
-      translationSource = 'api';
-    }
-  } catch(e) {
-    console.warn('Translation API failed, falling back to conceptMap:', e);
-  }
-
-  // 2. 提取关键词
+  // 1. AI 输入理解（任务A）；失败退回 翻译API + conceptMap 提取
+  const aiFlags = { understand: false, assess: false, advise: false };
+  let understandData = null;
   let keywordGroups;
-  if (translationSource === 'api' && translatedText) {
-    keywordGroups = extractKeywordsFromEnglish(translatedText, desc);
+  const understandRes = await HackAI.aiTask('understand', { description: desc });
+  if (understandRes.ok) {
+    understandData = understandRes.data;
+    keywordGroups = keywordGroupsFromAI(understandData, desc);
+    aiFlags.understand = true;
   } else {
-    keywordGroups = extractKeywordGroups(desc);
+    console.warn('AI understand unavailable (' + understandRes.error + '), falling back');
+    let translatedText = '';
+    try {
+      translatedText = await translateText(desc);
+    } catch (e) {
+      console.warn('Translation API failed, falling back to conceptMap:', e);
+    }
+    keywordGroups = (translatedText && translatedText.length > 3)
+      ? extractKeywordsFromEnglish(translatedText, desc)
+      : extractKeywordGroups(desc);
   }
 
   // 3. 提取中文关键词（用于百度搜索和中文结果命中匹配）
@@ -1183,6 +1185,20 @@ function extractEnglishPhrases(text, conceptMap) {
   result.sort((a, b) => b.score - a.score);
 
   return result.map(r => r.phrase);
+}
+
+// 任务A（AI输入理解）结果 → 现有 keywordGroups 形状，下游搜索代码零改动
+function keywordGroupsFromAI(d, desc) {
+  const allTerms = [...new Set([...(d.key_terms || []), d.search_query_zh])].filter(Boolean);
+  return {
+    groups: [],
+    searchTerms: d.search_query_en.split(/\s+/),
+    searchQuery: d.search_query_en,
+    allTerms,
+    phrases: [],
+    ghPhraseQueries: (d.github_queries || []).slice(0, 3),
+    aiUnderstand: d,
+  };
 }
 
 // 从翻译后的英文文本提取搜索关键词（P1优化：最长匹配+短语提取）
