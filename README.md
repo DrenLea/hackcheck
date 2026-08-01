@@ -111,6 +111,8 @@ A full-process assistant tool that helps zero-experience developers go from idea
 
 ### 快速开始
 
+环境要求：仅需 Python 3.8+（用于本地服务器），无需安装任何第三方依赖。
+
 ```bash
 # 克隆仓库
 git clone https://github.com/DrenLea/hackcheck.git
@@ -118,14 +120,26 @@ cd hackcheck
 
 # 方式一（推荐，启用 AI 增强）：配置密钥后用内置服务器启动
 cp .env.example .env   # 编辑 .env 填入你的 API Key
-python tools/ai_proxy.py
+python tools/ai_proxy.py        # 默认 8080 端口，可用 python tools/ai_proxy.py 9000 换端口
 # 访问 http://localhost:8080
 
 # 方式二（无 AI，纯静态）：
 python -m http.server 8080
+
+# 方式三（线上部署）：推送到 Vercel，在平台环境变量中配置 HACKCHECK_API_KEY
 ```
 
-无需安装任何第三方依赖；AI 增强为可选项，不配置密钥也可完整使用全部功能。
+无需安装任何第三方依赖；AI 增强为可选项，不配置密钥也可完整使用全部功能（自动降级为纯本地逻辑）。
+
+### 运行测试
+
+```bash
+# 后端代理测试（16 个用例，需 pytest）
+python -m pytest tools/test_ai_proxy.py -q
+
+# 前端 AI 层测试：启动本地服务器后浏览器打开
+# http://localhost:8080/tests/ai.test.html   （预期 ALL PASS）
+```
 
 ### 项目结构
 
@@ -152,12 +166,13 @@ hackcheck/
 ├── tests/
 │   └── ai.test.html        # 前端 AI 层浏览器测试
 ├── .env.example            # AI 配置示例
+├── CHANGELOG.md            # 变更日志
 └── README.md
 ```
 
 ### 使用流程
 
-1. **选题阶段**：在首页输入项目描述，点击"搜索相似项目"，系统自动翻译并搜索 GitHub，返回稀缺度评分和同类项目列表
+1. **选题阶段**：在首页输入项目描述，点击"搜索相似项目"，系统自动翻译并进行 6 渠道并行搜索，返回稀缺度评分、同类项目列表；配置 AI 后额外输出功能级对比矩阵与优化建议
 2. **选型阶段**：进入"技术选型"模块，选择预设方案，获取技术栈推荐和成本分析
 3. **开发阶段**：进入"代码扫描"模块，上传整个项目文件夹，获取安全评分和改进建议
 4. **部署阶段**：进入"Demo辅助"模块，按 Git 教程完成版本控制，检测项目类型并选择部署方案
@@ -271,6 +286,8 @@ Pure static hosting: use the ⚙ button on the page to enter your own key (store
 
 ### Quick Start
 
+Requirements: Python 3.8+ only (for the local server) — no third-party dependencies.
+
 ```bash
 # Clone the repository
 git clone https://github.com/DrenLea/hackcheck.git
@@ -278,14 +295,26 @@ cd hackcheck
 
 # Option 1 (recommended, enables AI enhancement): configure key, then use the built-in server
 cp .env.example .env   # Edit .env and fill in your API key
-python tools/ai_proxy.py
+python tools/ai_proxy.py        # Port 8080 by default; use `python tools/ai_proxy.py 9000` to change
 # Visit http://localhost:8080
 
 # Option 2 (no AI, pure static):
 python -m http.server 8080
+
+# Option 3 (online): deploy to Vercel and set HACKCHECK_API_KEY in platform env vars
 ```
 
-No third-party dependencies to install; AI enhancement is optional — all features work fully without a key.
+No third-party dependencies to install; AI enhancement is optional — all features work fully without a key (auto-fallback to pure local logic).
+
+### Running Tests
+
+```bash
+# Backend proxy tests (16 cases, requires pytest)
+python -m pytest tools/test_ai_proxy.py -q
+
+# Frontend AI-layer tests: start the local server, then open in a browser
+# http://localhost:8080/tests/ai.test.html   (expect ALL PASS)
+```
 
 ### Project Structure
 
@@ -312,12 +341,13 @@ hackcheck/
 ├── tests/
 │   └── ai.test.html        # Browser tests for the frontend AI layer
 ├── .env.example            # AI configuration example
+├── CHANGELOG.md            # Changelog
 └── README.md
 ```
 
 ### Workflow
 
-1. **Topic Selection**: Enter your project description on the home page, click "Search Similar Projects" — the system auto-translates and searches GitHub, returning a scarcity score and similar project list
+1. **Topic Selection**: Enter your project description on the home page, click "Search Similar Projects" — the system auto-translates and runs a 6-channel parallel search, returning a scarcity score and similar project list; with AI configured, it additionally outputs a feature comparison matrix and optimization advice
 2. **Tech Selection**: Go to the "Tech Selection" module, choose a preset plan, and get tech stack recommendations with cost analysis
 3. **Development**: Go to the "Code Scan" module, upload your entire project folder, and get a security score with improvement suggestions
 4. **Deployment**: Go to the "Demo Assistant" module, follow the Git tutorial for version control, detect project type, and choose a deployment plan
