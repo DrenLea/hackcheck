@@ -389,6 +389,11 @@ const I18N = {
   // ==================== 语言切换 ====================
   'lang.switch': { zh: 'EN', en: '中' },
   'lang.switchTitle': { zh: '切换到英文', en: 'Switch to Chinese' },
+
+  // ==================== AI 增强（选题） ====================
+  'analysis.scoreAdvice': { zh: '🧭 评分建议', en: '🧭 Score Advice' },
+  'analysis.blueOceanRec': { zh: '🌊 蓝海方向推荐', en: '🌊 Blue Ocean Directions' },
+  'blueOcean.examples': { zh: '参考案例', en: 'Examples' },
 };
 
 // ==================== 核心函数 ====================

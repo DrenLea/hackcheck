@@ -1164,3 +1164,15 @@ body {
   .preset-plans { grid-template-columns: 1fr; }
   .cost-item { flex-direction: column; align-items: flex-start; gap: 2px; }
 }
+
+/* ==================== AI 评分建议 / 蓝海推荐 ==================== */
+.score-advice-section, .blue-ocean-section { margin-top: 20px; }
+.advice-item { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 8px; background: var(--bg-surface); }
+.advice-dim { font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.advice-score { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+.advice-why { font-size: 13px; color: var(--text-muted); margin: 2px 0; }
+.advice-how { font-size: 13px; margin: 4px 0 0; }
+.blue-ocean-item { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 8px; background: var(--bg-surface); }
+.blue-ocean-name { font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.blue-ocean-why { font-size: 13px; color: var(--text-muted); margin: 4px 0; }
+.blue-ocean-examples { font-size: 12px; color: var(--text-muted); margin: 2px 0 0; }

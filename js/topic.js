@@ -128,7 +128,24 @@ async function handleTopicSearch() {
   AppState.topic.multiScores = analysis.multiScores;
   AppState.topic.analyzed = true;
 
-  renderTopicResults(analysis, keywordGroups, combinedStats);
+  // 9.5 AI 建议生成（任务C）；失败退回静态 differentiation 文案
+  let advise = null;
+  const adviseRes = await HackAI.aiTask('advise', {
+    summary: understandData ? understandData.summary : desc.slice(0, 100),
+    scores: analysis.multiScores,
+    composite: analysis.compositeScore,
+    oceanType: analysis.oceanType,
+    patternNames: analysis.matchedPatterns.slice(0, 3).map(p => p.pattern),
+    blueOceanDirections: TOPIC_DATA.blueOceanDirections.map(d => d.direction),
+  });
+  if (adviseRes.ok) {
+    advise = adviseRes.data;
+    aiFlags.advise = true;
+  } else {
+    console.warn('AI advise unavailable (' + adviseRes.error + '), falling back');
+  }
+
+  renderTopicResults(analysis, keywordGroups, combinedStats, advise, aiFlags);
   updateOverallScore();
   saveState();
 
@@ -1627,7 +1644,7 @@ function analyzeTopic(description, keywordGroups, searchStats, socialDemand, aiA
   };
 }
 
-function renderTopicResults(analysis, keywordGroups, searchStats) {
+function renderTopicResults(analysis, keywordGroups, searchStats, advise = null, aiFlags = null) {
   $('#topicResults').style.display = 'block';
 
   // 分数
@@ -1760,12 +1777,56 @@ function renderTopicResults(analysis, keywordGroups, searchStats) {
     $('#boostersFound').innerHTML = '<div class="empty-hint">' + t('empty.boosters') + '</div>';
   }
 
-  // 差异化策略
-  if (analysis.differentiation && analysis.differentiation.length > 0) {
-    $('#differentiationStrategies').innerHTML = analysis.differentiation.map((d, i) => `
-      <div class="diff-strategy"><span class="diff-num">${i+1}</span><span class="diff-text">${d}</span></div>
+  // 差异化策略（AI 生成优先，退回模式库静态文案）
+  const diffList = (advise && advise.differentiation && advise.differentiation.length > 0)
+    ? advise.differentiation
+    : (analysis.differentiation || []);
+  if (diffList.length > 0) {
+    $('#differentiationStrategies').innerHTML = diffList.map((d, i) => `
+      <div class="diff-strategy"><span class="diff-num">${i + 1}</span><span class="diff-text">${escapeHtml(d)}</span></div>
     `).join('');
   } else {
     $('#differentiationStrategies').innerHTML = '<div class="empty-hint">' + t('empty.differentiation') + '</div>';
+  }
+
+  // 评分建议（任务C）
+  const adviceSection = $('#scoreAdviceSection');
+  if (advise && advise.score_advice) {
+    const dimNames = {
+      originality: t('analysis.originality'),
+      scarcity: t('analysis.scarcityBased'),
+      meaning: t('analysis.meaningfulness'),
+    };
+    $('#scoreAdviceList').innerHTML = advise.score_advice.map(a => `
+      <div class="advice-item">
+        <div class="advice-dim">${dimNames[a.dimension] || escapeHtml(a.dimension)}
+          <span class="advice-score">${analysis.multiScores[a.dimension] != null ? analysis.multiScores[a.dimension] : ''}</span></div>
+        <p class="advice-why">${escapeHtml(a.why)}</p>
+        <p class="advice-how">💡 ${escapeHtml(a.how)}</p>
+      </div>`).join('');
+    adviceSection.style.display = 'block';
+  } else {
+    adviceSection.style.display = 'none';
+  }
+
+  // 蓝海方向推荐（任务C，按 direction 映射回数据表，映射不到静默丢弃）
+  const boSection = $('#blueOceanSection');
+  const boItems = (advise && advise.blue_ocean ? advise.blue_ocean : [])
+    .map(b => {
+      const d = TOPIC_DATA.blueOceanDirections.find(x => x.direction === b.direction);
+      return d ? { d, why: b.why } : null;
+    })
+    .filter(Boolean);
+  if (boItems.length > 0) {
+    $('#blueOceanList').innerHTML = boItems.map(({ d, why }) => `
+      <div class="blue-ocean-item">
+        <div class="blue-ocean-name">${escapeHtml(d.direction)}
+          <span class="pattern-meta">${t('meta.scarcity')} ${'★'.repeat(d.scarcity)}${'☆'.repeat(5 - d.scarcity)}</span></div>
+        <p class="blue-ocean-why">${escapeHtml(why)}</p>
+        <p class="blue-ocean-examples">${t('blueOcean.examples')}: ${d.examples.map(escapeHtml).join(' · ')}</p>
+      </div>`).join('');
+    boSection.style.display = 'block';
+  } else {
+    boSection.style.display = 'none';
   }
 }
