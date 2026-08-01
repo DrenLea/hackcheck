@@ -23,13 +23,13 @@ A full-process assistant tool that helps zero-experience developers go from idea
 #### 1. 选题评审与查重
 
 - 集成 MyMemory 多语种翻译 API，自动将中文描述翻译为英文
-- **6 渠道并行搜索**：GitHub / Devpost / Bing / 百度 / Wikipedia / DuckDuckGo
+- **6 渠道并行搜索**：GitHub / Devpost / Bing / DuckDuckGo / Wikipedia / ProductHunt
   - GitHub：通过 API 搜索代码仓库（多查询回退策略）
   - Devpost：通过 r.jina.ai 渲染 JS 后抓取黑客松项目
-  - Bing：通过 r.jina.ai 渲染 JS 后解析搜索引擎结果
-  - 百度：使用中文原词搜索，自动提取中文关键词
-  - Wikipedia：通过 CORS 友好的 API 搜索百科条目
+  - Bing：通过 r.jina.ai 渲染 JS 后解析搜索引擎结果（中英双查询）
   - DuckDuckGo：通过 Instant Answer API 获取快速答案
+  - Wikipedia：通过 CORS 友好的 API 搜索百科条目
+  - ProductHunt：通过 r.jina.ai 渲染 JS 后抓取同类产品
 - 自动过滤 Bing 搜索结果中的广告（Sponsored）
 - 基于搜索结果数量和命中百分比计算稀缺度评分
 - 从原创性、稀缺度、意义感三个维度量化项目价值
@@ -76,6 +76,25 @@ A full-process assistant tool that helps zero-experience developers go from idea
 - 生成 P0-P3 优先级改进清单
 - 支持用户手动调整 AI 评分
 
+### AI 增强（可选）
+
+配置 API Key 后，选题评审升级为 AI 语义分析；不配置则自动降级为纯本地逻辑，功能不缺失。
+
+- **输入理解**：AI 翻译并提取搜索关键词（替代硬编码词表）
+- **语义匹配**：AI 判定搜索结果相关度与查重模式命中（替代字符串匹配）
+- **建议生成**：评分建议、定制差异化策略、蓝海方向推荐
+
+配置项（`.env`，参考 `.env.example`）：
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `HACKCHECK_API_KEY` | 是 | OpenAI 兼容 API Key |
+| `AI_BASE_URL` | 否 | 默认 `https://api.openai-next.com/v1` |
+| `AI_MODEL` | 否 | 默认 `gpt-4o-mini` |
+
+线上部署（Vercel）：在平台环境变量中配置同名变量，`api/ai.js` 自动生效。
+纯静态托管：页面 ⚙ 按钮可填自备 Key（仅存本机浏览器）。
+
 ### 技术栈
 
 - **前端**：HTML5 + CSS3 + 原生 JavaScript（无框架依赖）
@@ -84,7 +103,7 @@ A full-process assistant tool that helps zero-experience developers go from idea
   - [GitHub Search API](https://docs.github.com/en/rest/search) - 仓库搜索
   - [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) - 百科搜索
   - [DuckDuckGo Instant Answer API](https://duckduckgo.com/api) - 快速答案
-  - [r.jina.ai](https://r.jina.ai/) - JS渲染代理（用于 Bing/百度/Devpost 搜索）
+  - [r.jina.ai](https://r.jina.ai/) - JS渲染代理（用于 Bing/Devpost/ProductHunt 搜索）
   - [corsproxy.io](https://corsproxy.io/) - CORS 代理（备用）
 - **数据存储**：LocalStorage（本地持久化，无需后端）
 - **部署**：纯静态文件，可部署到任何静态托管平台
@@ -94,17 +113,18 @@ A full-process assistant tool that helps zero-experience developers go from idea
 ```bash
 # 克隆仓库
 git clone https://github.com/DrenLea/hackcheck.git
-
-# 进入项目目录
 cd hackcheck
 
-# 直接用浏览器打开 index.html，或启动本地服务器
-python -m http.server 8080
+# 方式一（推荐，启用 AI 增强）：配置密钥后用内置服务器启动
+cp .env.example .env   # 编辑 .env 填入你的 API Key
+python tools/ai_proxy.py
+# 访问 http://localhost:8080
 
-# 然后访问 http://localhost:8080
+# 方式二（无 AI，纯静态）：
+python -m http.server 8080
 ```
 
-无需安装任何依赖，无需配置环境变量，打开即用。
+无需安装任何第三方依赖；AI 增强为可选项，不配置密钥也可完整使用全部功能。
 
 ### 项目结构
 
@@ -120,8 +140,17 @@ hackcheck/
 │   ├── dev.js              # 阶段3：代码扫描
 │   ├── demo.js             # 阶段4：Demo辅助
 │   ├── pitch.js            # 阶段5：Pitch生成与评审
+│   ├── ai.js               # AI 客户端层（可选增强，自动降级）
 │   ├── i18n.js             # 中英双语文案
 │   └── data.js             # 配置数据（技术栈、评审标准、查重库等）
+├── api/
+│   └── ai.js               # Vercel Serverless AI 代理
+├── tools/
+│   ├── ai_proxy.py         # 本地开发服务器（静态文件 + AI 代理）
+│   └── test_ai_proxy.py    # 代理测试（pytest）
+├── tests/
+│   └── ai.test.html        # 前端 AI 层浏览器测试
+├── .env.example            # AI 配置示例
 └── README.md
 ```
 
@@ -153,13 +182,13 @@ A full-process assistant tool that helps zero-experience developers go from idea
 #### 1. Topic Review & Duplicate Detection
 
 - Integrated MyMemory multilingual translation API — auto-translates Chinese descriptions to English
-- **6-channel parallel search**: GitHub / Devpost / Bing / Baidu / Wikipedia / DuckDuckGo
+- **6-channel parallel search**: GitHub / Devpost / Bing / DuckDuckGo / Wikipedia / ProductHunt
   - GitHub: API-based repository search (multi-query fallback strategy)
   - Devpost: Scrapes hackathon projects via r.jina.ai (JS rendering)
-  - Bing: Parses search engine results via r.jina.ai (JS rendering)
-  - Baidu: Searches with original Chinese keywords, auto-extracts Chinese terms
-  - Wikipedia: CORS-friendly API for encyclopedia articles
+  - Bing: Parses search engine results via r.jina.ai (JS rendering, dual zh/en queries)
   - DuckDuckGo: Instant Answer API for quick answers
+  - Wikipedia: CORS-friendly API for encyclopedia articles
+  - ProductHunt: Scrapes similar products via r.jina.ai (JS rendering)
 - Auto-filters sponsored (ad) results from Bing
 - Scarcity score calculated from search result count and hit percentage
 - Quantifies project value across three dimensions: originality, scarcity, and social impact
@@ -206,6 +235,25 @@ A full-process assistant tool that helps zero-experience developers go from idea
 - P0-P3 priority improvement list
 - Users can manually adjust AI scores
 
+### AI Enhancement (Optional)
+
+With an API key configured, topic review upgrades to AI semantic analysis; without one, it automatically falls back to pure local logic with no loss of functionality.
+
+- **Input Understanding**: AI translates and extracts search keywords (replaces hardcoded vocabulary)
+- **Semantic Matching**: AI judges search result relevance and duplicate-pattern hits (replaces string matching)
+- **Suggestion Generation**: score advice, tailored differentiation strategies, blue-ocean direction recommendations
+
+Configuration (`.env`, see `.env.example`):
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `HACKCHECK_API_KEY` | Yes | OpenAI-compatible API key |
+| `AI_BASE_URL` | No | Defaults to `https://api.openai-next.com/v1` |
+| `AI_MODEL` | No | Defaults to `gpt-4o-mini` |
+
+Online deployment (Vercel): set the same environment variables on the platform — `api/ai.js` picks them up automatically.
+Pure static hosting: use the ⚙ button on the page to enter your own key (stored only in your local browser).
+
 ### Tech Stack
 
 - **Frontend**: HTML5 + CSS3 + Vanilla JavaScript (no framework dependencies)
@@ -214,7 +262,7 @@ A full-process assistant tool that helps zero-experience developers go from idea
   - [GitHub Search API](https://docs.github.com/en/rest/search) — Repository search
   - [Wikipedia API](https://www.mediawiki.org/wiki/API:Main_page) — Encyclopedia search
   - [DuckDuckGo Instant Answer API](https://duckduckgo.com/api) — Quick answers
-  - [r.jina.ai](https://r.jina.ai/) — JS rendering proxy (for Bing/Baidu/Devpost search)
+  - [r.jina.ai](https://r.jina.ai/) — JS rendering proxy (for Bing/Devpost/ProductHunt search)
   - [corsproxy.io](https://corsproxy.io/) — CORS proxy (fallback)
 - **Data Storage**: LocalStorage (client-side persistence, no backend needed)
 - **Deployment**: Pure static files, deployable to any static hosting platform
@@ -224,17 +272,18 @@ A full-process assistant tool that helps zero-experience developers go from idea
 ```bash
 # Clone the repository
 git clone https://github.com/DrenLea/hackcheck.git
-
-# Navigate to project directory
 cd hackcheck
 
-# Open index.html directly in browser, or start a local server
-python -m http.server 8080
-
+# Option 1 (recommended, enables AI enhancement): configure key, then use the built-in server
+cp .env.example .env   # Edit .env and fill in your API key
+python tools/ai_proxy.py
 # Visit http://localhost:8080
+
+# Option 2 (no AI, pure static):
+python -m http.server 8080
 ```
 
-No dependencies to install, no environment variables to configure — just open and use.
+No third-party dependencies to install; AI enhancement is optional — all features work fully without a key.
 
 ### Project Structure
 
@@ -250,8 +299,17 @@ hackcheck/
 │   ├── dev.js              # Stage 3: Code scan
 │   ├── demo.js             # Stage 4: Demo assistance
 │   ├── pitch.js            # Stage 5: Pitch generation & review
+│   ├── ai.js               # AI client layer (optional enhancement, auto-fallback)
 │   ├── i18n.js             # Bilingual (zh/en) strings
 │   └── data.js             # Configuration data (tech stack, review criteria, pattern library, etc.)
+├── api/
+│   └── ai.js               # Vercel Serverless AI proxy
+├── tools/
+│   ├── ai_proxy.py         # Local dev server (static files + AI proxy)
+│   └── test_ai_proxy.py    # Proxy tests (pytest)
+├── tests/
+│   └── ai.test.html        # Browser tests for the frontend AI layer
+├── .env.example            # AI configuration example
 └── README.md
 ```
 
