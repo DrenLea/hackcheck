@@ -5,7 +5,7 @@
 <body>
 <h3>js/ai.js 纯函数测试（零依赖）</h3>
 <pre id="out">loading...</pre>
-<script src="../js/ai.js?v=2"></script>
+<script src="../js/ai.js?v=3"></script>
 <script>
 const out = []; let failed = 0;
 function assert(name, cond) { out.push((cond ? 'PASS' : 'FAIL') + '  ' + name); if (!cond) failed++; }
@@ -57,6 +57,23 @@ try {
     matrix:[{feature:'x', overlap:'high', maturity:'done'}] }));
   assert('compare: 缺 recommendations 拒绝', !T.compare.valid({ ...goodM, recommendations: undefined }));
   assert('compare: matrix 可为空数组（无竞品时）', T.compare.valid({ ...goodM, matrix: [] }));
+
+  // ---- techadvise schema ----
+  const goodT = { plan:'budget', plan_reason:'r',
+    recommended:[{tech:'Vue.js', role:'前端', why:'w'}, {tech:'SQLite', role:'存储', why:'w'}],
+    avoid:[{tech:'Spring Boot (Java)', why:'太重'}],
+    reuse:[{capability:'用药提醒', suggestion:'用现成开源库'}],
+    risks:['0基础团队配置时间可能超预算'],
+    mvp:['先做提醒闭环','再接方言语音'] };
+  assert('techadvise: 合法数据通过', T.techadvise.valid(goodT));
+  assert('techadvise: 缺 plan 拒绝', !T.techadvise.valid({ ...goodT, plan: undefined }));
+  assert('techadvise: recommended 为空拒绝', !T.techadvise.valid({ ...goodT, recommended: [] }));
+  assert('techadvise: recommended 缺 why 拒绝', !T.techadvise.valid({ ...goodT,
+    recommended:[{tech:'Vue.js', role:'前端'}] }));
+  assert('techadvise: mvp 为空拒绝', !T.techadvise.valid({ ...goodT, mvp: [] }));
+  assert('techadvise: avoid/reuse 可为空数组', T.techadvise.valid({ ...goodT, avoid: [], reuse: [] }));
+  assert('techadvise: reuse 缺 suggestion 拒绝', !T.techadvise.valid({ ...goodT,
+    reuse:[{capability:'x'}] }));
 
   // ---- radar geometry ----
   const pts = window.HackAI.computeRadarPoints([100,100,100,100,100,100], 260, 100);

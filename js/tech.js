@@ -32,13 +32,22 @@ function initTechModule() {
     });
   });
 
-  $('#hackathonDuration').addEventListener('change', e => { AppState.tech.duration = parseInt(e.target.value); evaluateTechStack(); saveState(); });
-  $('#teamSize').addEventListener('change', e => { AppState.tech.teamSize = parseInt(e.target.value); evaluateTechStack(); saveState(); });
-  $('#teamExperience').addEventListener('change', e => { AppState.tech.experience = parseInt(e.target.value); evaluateTechStack(); saveState(); });
+  // 团队约束进入 AI prompt，改动后旧建议过期（staleTechAdvice 只标记，不清空已有内容）
+  $('#hackathonDuration').addEventListener('change', e => { AppState.tech.duration = parseInt(e.target.value); evaluateTechStack(); markTechAdviceStale(); saveState(); });
+  $('#teamSize').addEventListener('change', e => { AppState.tech.teamSize = parseInt(e.target.value); evaluateTechStack(); markTechAdviceStale(); saveState(); });
+  $('#teamExperience').addEventListener('change', e => { AppState.tech.experience = parseInt(e.target.value); evaluateTechStack(); markTechAdviceStale(); saveState(); });
 
   $('#hackathonDuration').value = AppState.tech.duration;
   $('#teamSize').value = AppState.tech.teamSize;
   $('#teamExperience').value = AppState.tech.experience;
+
+  // AI 选型顾问：展示阶段1交接的选题结论，并恢复已生成的建议
+  $('#techAiBtn')?.addEventListener('click', runTechAdvise);
+  renderTechAiContext();
+  if (AppState.tech.aiAdvice) {
+    try { renderTechAdvice(AppState.tech.aiAdvice); }
+    catch (e) { console.warn('恢复AI选型建议失败:', e.message); }
+  }
 
   if (AppState.tech.selected.length > 0) {
     // 恢复方案高亮
@@ -282,6 +291,201 @@ function renderTaskDivision() {
   `).join('');
 
   $('#divisionTips').innerHTML = `<div class="division-tips-card"><strong>💡 分工建议</strong><ul>${template.tips.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+}
+
+// ============================================
+// AI 选型顾问：承接阶段1（选题）的语义结论
+// 输入 = 选题摘要/目标用户/核心功能/差异点/成熟实现 + 团队约束
+// 输出 = 推荐方案 + 逐项技术理由 + 避免项 + 该复用的能力 + 风险 + MVP 顺序
+// AI 不可用时整块降级为提示文案，不影响本地评估逻辑。
+// ============================================
+
+const EXP_LABELS = { 1: '0基础/初学者', 2: '有一定开发经验', 3: '经验丰富' };
+
+// 候选技术清单（含复杂度与适配度），供 prompt 约束模型只能从中选
+function techOptionLines() {
+  const lines = [];
+  TECH_DATA.categories.forEach(cat => {
+    cat.technologies.forEach(t => {
+      lines.push(t.name + '（' + cat.name + '，复杂度C' + t.complexity
+        + '，黑客松适配' + t.hackathonFit + '/5，配置' + t.timeToSetup + 'h）');
+    });
+  });
+  return lines;
+}
+
+function renderTechAiContext() {
+  const box = $('#techAiContext');
+  if (!box) return;
+  const ctx = AppState.topic.aiContext;
+  const btn = $('#techAiBtn');
+  if (!ctx) {
+    box.innerHTML = '<div class="tech-ai-empty">' + escapeHtml(t('tech.ai.noContext')) + '</div>';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (btn) btn.disabled = false;
+  let html = '<div class="tech-ai-ctx-card"><div class="tech-ai-ctx-title">'
+    + escapeHtml(t('tech.ai.ctxTitle')) + '</div><ul>';
+  html += '<li><strong>' + escapeHtml(t('tech.ai.ctxSummary')) + '</strong>' + escapeHtml(ctx.summary) + '</li>';
+  if (ctx.targetUser) {
+    html += '<li><strong>' + escapeHtml(t('tech.ai.ctxUser')) + '</strong>' + escapeHtml(ctx.targetUser) + '</li>';
+  }
+  if (ctx.features && ctx.features.length) {
+    html += '<li><strong>' + escapeHtml(t('tech.ai.ctxFeatures')) + '</strong>'
+      + ctx.features.map(escapeHtml).join('、') + '</li>';
+  }
+  if (ctx.gaps && ctx.gaps.length) {
+    html += '<li><strong>' + escapeHtml(t('tech.ai.ctxGaps')) + '</strong>'
+      + ctx.gaps.map(escapeHtml).join('；') + '</li>';
+  }
+  html += '</ul></div>';
+  box.innerHTML = html;
+}
+
+// 团队约束改动：建议仍显示，但加一条「已过期，可重新生成」提示
+function markTechAdviceStale() {
+  if (!AppState.tech.aiAdvice) return;
+  const box = $('#techAiResult');
+  if (!box || box.style.display === 'none') return;
+  if (box.querySelector('.tech-ai-stale')) return;
+  const tip = document.createElement('div');
+  tip.className = 'tech-ai-stale';
+  tip.textContent = t('tech.ai.stale');
+  box.insertBefore(tip, box.firstChild);
+}
+
+// 选题结论变化时调用：旧建议已过期
+function invalidateTechAdvice() {
+  AppState.tech.aiAdvice = null;
+  const r = $('#techAiResult');
+  if (r) { r.style.display = 'none'; r.innerHTML = ''; }
+  renderTechAiContext();
+}
+
+async function runTechAdvise() {
+  const ctx = AppState.topic.aiContext;
+  if (!ctx) { showToast(t('tech.ai.noContext'), 'warning'); return; }
+
+  const btn = $('#techAiBtn');
+  const status = $('#techAiStatus');
+  const result = $('#techAiResult');
+  if (btn) btn.disabled = true;
+  if (result) result.style.display = 'none';
+  if (status) {
+    status.style.display = 'block';
+    status.innerHTML = '<div class="search-loading"><div class="loading-spinner"></div><span>'
+      + escapeHtml(t('tech.ai.loading')) + '</span></div>';
+  }
+
+  const res = await HackAI.aiTask('techadvise', {
+    summary: ctx.summary,
+    targetUser: ctx.targetUser,
+    features: ctx.features,
+    gaps: ctx.gaps,
+    mature: ctx.mature,
+    duration: AppState.tech.duration,
+    teamSize: AppState.tech.teamSize,
+    experienceLabel: EXP_LABELS[AppState.tech.experience] || EXP_LABELS[1],
+    techOptions: techOptionLines(),
+    planOptions: TECH_DATA.presetPlans.map(p => ({
+      id: p.id, name: p.name, cost: p.costLabel, techs: p.techs.join('/'),
+    })),
+  });
+
+  if (status) status.style.display = 'none';
+  if (btn) btn.disabled = false;
+
+  if (!res.ok) {
+    if (status) {
+      status.style.display = 'block';
+      status.innerHTML = '<div class="tech-ai-error">' + escapeHtml(t('tech.ai.failed'))
+        + ' (' + escapeHtml(res.error) + ')</div>';
+    }
+    return;
+  }
+
+  AppState.tech.aiAdvice = res.data;
+  renderTechAdvice(res.data);
+  saveState();
+  showToast(t('tech.ai.done'), 'success');
+}
+
+function renderTechAdvice(d) {
+  const box = $('#techAiResult');
+  if (!box) return;
+
+  const plan = TECH_DATA.presetPlans.find(p => p.id === d.plan);
+  const planLabel = plan ? (plan.icon + ' ' + plan.name + '（' + plan.costLabel + '）') : d.plan;
+
+  let html = '<div class="tech-ai-plan"><div class="tech-ai-plan-head"><span class="tech-ai-plan-label">'
+    + escapeHtml(t('tech.ai.planPick')) + '</span><span class="tech-ai-plan-name">'
+    + escapeHtml(planLabel) + '</span></div><p>' + escapeHtml(d.plan_reason) + '</p>';
+  if (plan) {
+    html += '<button class="btn btn-secondary btn-sm" id="techAiApplyPlan" data-plan="' + escapeHtml(plan.id) + '">'
+      + escapeHtml(t('tech.ai.applyPlan')) + '</button>';
+  }
+  html += '</div>';
+
+  // 推荐技术表：技术 / 承担角色 / 为什么（结合本项目）
+  html += '<div class="tech-ai-block"><h5>' + escapeHtml(t('tech.ai.recTitle')) + '</h5>';
+  html += '<div class="tech-ai-table-wrap"><table class="tech-ai-table"><thead><tr><th>'
+    + escapeHtml(t('tech.ai.colTech')) + '</th><th>' + escapeHtml(t('tech.ai.colRole'))
+    + '</th><th>' + escapeHtml(t('tech.ai.colWhy')) + '</th></tr></thead><tbody>';
+  d.recommended.forEach(r => {
+    html += '<tr><td class="tech-ai-tech">' + escapeHtml(r.tech) + '</td><td>'
+      + escapeHtml(r.role) + '</td><td>' + escapeHtml(r.why) + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  html += '<button class="btn btn-primary btn-sm" id="techAiApplyStack">'
+    + escapeHtml(t('tech.ai.applyStack')) + '</button></div>';
+
+  const listBlock = (key, items, cls, fmt) => {
+    if (!items || items.length === 0) return '';
+    return '<div class="tech-ai-block ' + cls + '"><h5>' + escapeHtml(t(key))
+      + '</h5><ul>' + items.map(fmt).join('') + '</ul></div>';
+  };
+
+  html += listBlock('tech.ai.reuseTitle', d.reuse, 'tech-ai-reuse',
+    r => '<li><strong>' + escapeHtml(r.capability) + '</strong>：' + escapeHtml(r.suggestion) + '</li>');
+  html += listBlock('tech.ai.avoidTitle', d.avoid, 'tech-ai-avoid',
+    a => '<li><strong>' + escapeHtml(a.tech) + '</strong>：' + escapeHtml(a.why) + '</li>');
+  // MVP 是有序步骤，用 ol 保留优先级语义
+  if (d.mvp && d.mvp.length) {
+    html += '<div class="tech-ai-block tech-ai-mvp"><h5>' + escapeHtml(t('tech.ai.mvpTitle'))
+      + '</h5><ol>' + d.mvp.map(s => '<li>' + escapeHtml(s) + '</li>').join('') + '</ol></div>';
+  }
+  html += listBlock('tech.ai.risksTitle', d.risks, 'tech-ai-risks',
+    s => '<li>' + escapeHtml(s) + '</li>');
+
+  box.innerHTML = html;
+  box.style.display = 'block';
+
+  $('#techAiApplyStack')?.addEventListener('click', applyAiTechStack);
+  $('#techAiApplyPlan')?.addEventListener('click', e => {
+    const card = document.querySelector('.plan-card[data-plan="' + e.currentTarget.dataset.plan + '"]');
+    if (card) { switchSubmodule('tech', 'presets'); card.click(); }
+  });
+}
+
+// 一键应用：把 AI 推荐的技术写入选型（只接受候选清单里存在的名称）
+function applyAiTechStack() {
+  const advice = AppState.tech.aiAdvice;
+  if (!advice) return;
+  const known = new Set();
+  TECH_DATA.categories.forEach(c => c.technologies.forEach(x => known.add(x.name)));
+  const picked = advice.recommended.map(r => r.tech).filter(n => known.has(n));
+  if (picked.length === 0) { showToast(t('tech.ai.applyEmpty'), 'warning'); return; }
+
+  AppState.tech.selected = [...new Set(picked)];
+  AppState.tech.activePlan = null;
+  $$('.tech-chip').forEach(chip => {
+    chip.classList.toggle('selected', AppState.tech.selected.includes(chip.dataset.tech));
+  });
+  $$('.plan-card').forEach(c => c.classList.remove('active'));
+  evaluateTechStack();
+  saveState();
+  showToast(tf('tech.ai.applied', { n: AppState.tech.selected.length }), 'success');
 }
 
 function renderTimeline() {

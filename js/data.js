@@ -1097,6 +1097,7 @@ const MODULE_SUBMODULES = {
   ],
   tech: [
     { id: 'config',       label: '团队配置',   labelKey: 'sub.tech.config',   icon: '⚙️' },
+    { id: 'aiadvice',     label: 'AI选型顾问', labelKey: 'sub.tech.aiadvice', icon: '🤖' },
     { id: 'presets',      label: '预设方案',   labelKey: 'sub.tech.presets',  icon: '💡' },
     { id: 'manual',       label: '手动选型',   labelKey: 'sub.tech.manual',   icon: '🔧' },
     { id: 'results',      label: '评估结果',   labelKey: 'sub.tech.result',   icon: '📈' },

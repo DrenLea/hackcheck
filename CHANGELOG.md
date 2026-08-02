@@ -4,6 +4,23 @@
 
 All notable changes to this project are documented here.
 
+## [2026-08-02] — AI 选型顾问（阶段1 → 阶段2 打通）
+
+### Added
+- **AI 选型顾问（`techadvise` AI 任务）**：技术选型模块新增区块，直接承接选题评审的语义结论，把「选题分析」变成「选型依据」：
+  - 输入 = 选题摘要 / 目标用户 / 核心功能 / 差异点 / 已有成熟实现（来自 `understand` + `compare`）+ 参赛时长 / 团队规模 / 经验水平
+  - 输出 = 推荐预设方案及理由、逐项技术推荐（技术 × 承担角色 × 为什么适合本项目）、🧩 该直接复用勿自研的能力、🚫 不建议使用的技术、⚠️ 落地风险、🚀 MVP 开发顺序
+  - prompt 约束模型只能从候选技术清单与预设方案 id 中选取，避免推荐项目里不存在的技术
+- **一键应用**：可把 AI 推荐技术写入选型（过滤候选清单外的名称），或跳转应用推荐预设方案
+- 阶段间数据交接：`AppState.topic.aiContext` 保存阶段1语义结论，`AppState.tech.aiAdvice` 持久化建议，刷新后自动恢复
+- 选题重新分析后旧建议自动失效；团队配置改动时提示「建议重新生成」
+- 侧边栏新增「🤖 AI选型顾问」子项；25 条 `tech.ai.*` 中英文案
+- 测试：pytest 新增 `techadvise` 白名单用例（17 passed）；浏览器测试页新增 7 条 schema 断言
+
+### Changed
+- 缓存版本号统一上调：styles v5 / data v5 / i18n v6 / ai v3 / core v2 / topic v4 / tech v2
+- `resetAll()` 补齐 `aiContext`、`aiAdvice`、`activePlan` 字段，与状态定义保持一致
+
 ## [2026-08-02] — AI 功能级对比矩阵
 
 ### Added

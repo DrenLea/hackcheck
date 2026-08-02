@@ -2,7 +2,7 @@
 // 与 tools/ai_proxy.py 的 handle_ai_request 遵循同一契约，改一处必须同步改另一处。
 const DEFAULT_BASE_URL = 'https://api.openai-next.com/v1';
 const DEFAULT_MODEL = 'deepseek-v4-flash';
-const VALID_TASKS = new Set(['understand', 'assess', 'advise', 'compare']);
+const VALID_TASKS = new Set(['understand', 'assess', 'advise', 'compare', 'techadvise']);
 const UPSTREAM_TIMEOUT_MS = 18000; // 须小于前端 20s
 
 export default async function handler(req, res) {

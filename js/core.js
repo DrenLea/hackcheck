@@ -14,7 +14,10 @@ const AppState = {
     score: 0,
     analyzed: false,
     githubResults: [],
-    multiScores: {}
+    multiScores: {},
+    // 阶段1 的 AI 语义结论，供阶段2（技术选型）复用：
+    // { summary, targetUser, features[], gaps[], mature[] }
+    aiContext: null
   },
   tech: {
     selected: [],
@@ -22,7 +25,8 @@ const AppState = {
     teamSize: 3,
     experience: 1,
     score: 0,
-    activePlan: null
+    activePlan: null,
+    aiAdvice: null
   },
   dev: {
     files: [],
@@ -210,6 +214,11 @@ function updateNavLabels() {
   } catch(e) { console.warn('i18n re-render topic failed:', e.message); }
   try {
     if (AppState.tech.selected.length > 0) evaluateTechStack();
+    // AI 选型顾问：上下文卡片与建议区块含译文，需随语言切换重绘
+    if (typeof renderTechAiContext === 'function') renderTechAiContext();
+    if (AppState.tech.aiAdvice && typeof renderTechAdvice === 'function') {
+      renderTechAdvice(AppState.tech.aiAdvice);
+    }
   } catch(e) { console.warn('i18n re-render tech failed:', e.message); }
   try {
     if (AppState.dev.scanned) renderScanResults();
@@ -359,8 +368,8 @@ function resetAll() {
   if (!confirm(t('app.resetConfirm'))) return;
 
   localStorage.removeItem('hackcheck_v2');
-  AppState.topic = { description: '', score: 0, analyzed: false, githubResults: [], multiScores: {} };
-  AppState.tech = { selected: [], duration: 48, teamSize: 3, experience: 1, score: 0 };
+  AppState.topic = { description: '', score: 0, analyzed: false, githubResults: [], multiScores: {}, aiContext: null };
+  AppState.tech = { selected: [], duration: 48, teamSize: 3, experience: 1, score: 0, activePlan: null, aiAdvice: null };
   AppState.dev = { files: [], scanned: false, score: 0, findings: { secrets: [], gitignore: null, quality: [], sensitive: [] } };
   AppState.demo = { projectType: null, detected: false };
   AppState.pitch = { generated: false, pitchContent: '', review: { ratings: {}, feedbacks: {}, score: 0, autoReviewed: false } };

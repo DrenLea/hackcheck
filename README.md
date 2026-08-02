@@ -84,6 +84,7 @@ A full-process assistant tool that helps zero-experience developers go from idea
 - **语义匹配**：AI 判定搜索结果相关度与查重模式命中（替代字符串匹配）
 - **建议生成**：评分建议、定制差异化策略、蓝海方向推荐
 - **功能级对比矩阵**：把最相关的相似项目当作竞品，逐项对比功能重合度与市场成熟度，输出「成熟实现（勿重复造轮子）/ 你的差异点（获奖关键）/ 竞品独点（可借鉴）/ 按优先级的优化建议」
+- **AI 选型顾问（阶段2）**：直接承接选题结论（摘要/目标用户/核心功能/差异点/已有成熟实现），结合参赛时长、团队规模与经验水平，推荐预设方案与逐项技术理由，并给出「该复用不该自研的能力 / 不建议使用的技术 / 落地风险 / MVP 开发顺序」，支持一键应用到选型
 
 配置项（`.env`，参考 `.env.example`）：
 
@@ -259,6 +260,7 @@ With an API key configured, topic review upgrades to AI semantic analysis; witho
 - **Semantic Matching**: AI judges search result relevance and duplicate-pattern hits (replaces string matching)
 - **Suggestion Generation**: score advice, tailored differentiation strategies, blue-ocean direction recommendations
 - **Feature Comparison Matrix**: treats the most relevant similar projects as competitors, compares feature overlap and market maturity item by item, and outputs "mature implementations (don't reinvent) / your differentiators (award key) / competitor strengths (worth borrowing) / prioritized recommendations"
+- **AI Stack Advisor (Stage 2)**: picks up the topic-review conclusions (summary / target user / core features / differentiators / already-mature areas) and combines them with hackathon duration, team size and experience level to recommend a preset plan with per-technology rationale, plus "capabilities to reuse instead of building / technologies to avoid / delivery risks / MVP build order" — applicable to your selection in one click
 
 Configuration (`.env`, see `.env.example`):
 

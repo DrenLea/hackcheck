@@ -188,9 +188,22 @@ async function handleTopicSearch() {
     }
   }
 
+  // 9.7 把阶段1的语义结论交接给阶段2（技术选型）：
+  // 摘要/目标用户来自 understand，核心功能/差异点/成熟实现来自 compare。
+  // 技术选型据此推荐「支撑差异点的技术」与「该复用不该自研的能力」。
+  AppState.topic.aiContext = (understandData || compare) ? {
+    summary: understandData ? understandData.summary : desc.slice(0, 100),
+    targetUser: understandData ? understandData.target_user : '',
+    features: compare ? (compare.features || []) : [],
+    gaps: compare ? (compare.gaps || []) : [],
+    mature: compare ? (compare.mature || []) : [],
+  } : null;
+
   renderTopicResults(analysis, keywordGroups, combinedStats, advise, aiFlags, compare);
   updateOverallScore();
   saveState();
+  // 选题结论变化后，技术选型的旧 AI 建议已过期
+  if (typeof invalidateTechAdvice === 'function') invalidateTechAdvice();
 
   $('#searchStatus').style.display = 'none';
   // 搜索完成后停留在搜索结果子页

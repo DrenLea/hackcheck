@@ -146,6 +146,46 @@
           && isArr(d.recommendations) && d.recommendations.every(isStr);
       },
     },
+    // 技术选型顾问：把阶段1（选题）的语义结论——摘要/目标用户/核心功能/差异点/
+    // 已有成熟实现——转成技术栈决策依据。关键约束是只能从候选技术清单里选，
+    // 避免模型推荐项目里不存在的技术导致无法一键应用。
+    techadvise: {
+      build(p) {
+        const feat = (p.features || []).join('、') || '未提供';
+        const gaps = (p.gaps || []).join('；') || '未提供';
+        const mature = (p.mature || []).join('；') || '未提供';
+        return [
+          { role: 'system', content: SYS },
+          { role: 'user', content:
+            '本项目：' + p.summary + '\n目标用户：' + (p.targetUser || '未知') + '\n' +
+            '核心功能：' + feat + '\n' +
+            '差异点（必须重点支撑）：' + gaps + '\n' +
+            '已有成熟实现（建议直接复用现成方案，不要自研）：' + mature + '\n\n' +
+            '团队约束：参赛时长 ' + p.duration + ' 小时，团队 ' + p.teamSize + ' 人，经验水平 ' + p.experienceLabel + '\n\n' +
+            '候选技术清单（recommended.tech 与 avoid.tech 只能从下列名称中原样选取，不得自造）：\n' +
+            p.techOptions.join('\n') + '\n\n' +
+            '候选预设方案（plan 只能从下列 id 中选一个）：\n' +
+            p.planOptions.map(x => x.id + ': ' + x.name + '（' + x.cost + '，含 ' + x.techs + '）').join('\n') + '\n\n' +
+            '输出 JSON：{"plan":"最适合的预设方案id","plan_reason":"为什么这个方案适合本项目",' +
+            '"recommended":[{"tech":"候选清单中的名称","role":"在本项目中承担什么","why":"结合本项目功能和差异点说明，不要泛泛而谈"}],' +
+            '"avoid":[{"tech":"候选清单中的名称","why":"为什么本项目不该用"}],' +
+            '"reuse":[{"capability":"该直接复用现成方案的能力","suggestion":"用什么现成服务/开源库，省下的时间投到哪"}],' +
+            '"risks":["结合时长与团队经验的落地风险，2-4条，要具体"],' +
+            '"mvp":["按优先级排序的最小可行产品开发顺序，3-5步，每步是一句可执行动作"]}\n' +
+            '要求：recommended 覆盖前端/后端/数据/部署等必要环节，4-8 项，优先低复杂度高适配；' +
+            '差异点相关的能力必须有技术支撑；成熟实现对应的能力放进 reuse 而不是自研。' },
+        ];
+      },
+      valid(d) {
+        return !!d && isStr(d.plan) && isStr(d.plan_reason)
+          && isArr(d.recommended) && d.recommended.length > 0
+          && d.recommended.every(r => r && isStr(r.tech) && isStr(r.role) && isStr(r.why))
+          && isArr(d.avoid) && d.avoid.every(a => a && isStr(a.tech) && isStr(a.why))
+          && isArr(d.reuse) && d.reuse.every(r => r && isStr(r.capability) && isStr(r.suggestion))
+          && isArr(d.risks) && d.risks.every(isStr)
+          && isArr(d.mvp) && d.mvp.length > 0 && d.mvp.every(isStr);
+      },
+    },
   };
 
   // ---------- 用户自备 key ----------

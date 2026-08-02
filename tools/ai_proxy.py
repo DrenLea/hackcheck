@@ -16,7 +16,7 @@ DEFAULT_BASE_URL = 'https://api.openai-next.com/v1'
 # 低成本模型；ds-v4-pro 在该中转站无渠道（中继报 no available channels），
 # 用 deepseek-v4-flash（DeepSeek 最新代费率最低）替代，JSON 结构化输出稳定。
 DEFAULT_MODEL = 'deepseek-v4-flash'
-VALID_TASKS = {'understand', 'assess', 'advise', 'compare'}
+VALID_TASKS = {'understand', 'assess', 'advise', 'compare', 'techadvise'}
 UPSTREAM_TIMEOUT = 18  # 秒，须小于前端的 20s 超时
 
 

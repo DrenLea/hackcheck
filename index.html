@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=4">
+  <link rel="stylesheet" href="css/styles.css?v=5">
 </head>
 <body>
   <div class="bg-grid"></div>
@@ -312,6 +312,15 @@
           </div>
         </div>
 
+        <!-- AI 选型顾问（承接阶段1选题结论） -->
+        <div class="tech-ai-section" data-submodule="aiadvice">
+          <h3 class="section-title" data-i18n="tech.ai.title">🤖 AI 选型顾问</h3>
+          <div class="tech-ai-context" id="techAiContext"></div>
+          <button class="btn btn-primary" id="techAiBtn" data-i18n="tech.ai.run">根据选题结论推荐技术栈</button>
+          <div class="tech-ai-status" id="techAiStatus" style="display:none;"></div>
+          <div class="tech-ai-result" id="techAiResult" style="display:none;"></div>
+        </div>
+
         <!-- 预设方案 -->
         <div class="preset-plans-section" data-submodule="presets">
           <h3 class="section-title" data-i18n="tech.presets">💡 快速选型方案（点击一键应用）</h3>
@@ -575,12 +584,12 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="js/data.js?v=4"></script>
-  <script src="js/i18n.js?v=5"></script>
-  <script src="js/ai.js?v=2"></script>
-  <script src="js/core.js?v=1"></script>
-  <script src="js/topic.js?v=3"></script>
-  <script src="js/tech.js?v=1"></script>
+  <script src="js/data.js?v=5"></script>
+  <script src="js/i18n.js?v=6"></script>
+  <script src="js/ai.js?v=3"></script>
+  <script src="js/core.js?v=2"></script>
+  <script src="js/topic.js?v=4"></script>
+  <script src="js/tech.js?v=2"></script>
   <script src="js/dev.js?v=1"></script>
   <script src="js/demo.js?v=1"></script>
   <script src="js/pitch.js?v=1"></script>

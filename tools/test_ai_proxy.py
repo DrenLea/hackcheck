@@ -66,6 +66,13 @@ def test_compare_task_accepted():
     assert resp["ok"] is True
 
 
+def test_techadvise_task_accepted():
+    body = {"task": "techadvise", "messages": [{"role": "user", "content": "x"}]}
+    status, resp = ai_proxy.handle_ai_request(body, ENV, fetch=fake_fetch_ok)
+    assert status == 200
+    assert resp["ok"] is True
+
+
 def test_missing_messages_rejected():
     status, resp = ai_proxy.handle_ai_request({"task": "understand"}, ENV, fetch=fake_fetch_ok)
     assert status == 400
