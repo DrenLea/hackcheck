@@ -158,6 +158,7 @@ hackcheck/
 │   ├── pitch.js            # 阶段5：Pitch生成与评审
 │   ├── ai.js               # AI 客户端层（可选增强，自动降级）
 │   ├── i18n.js             # 中英双语文案
+│   ├── features.js         # 前端功能开关（模块显隐配置）
 │   └── data.js             # 配置数据（技术栈、评审标准、查重库等）
 ├── api/
 │   └── ai.js               # Vercel Serverless AI 代理
@@ -334,6 +335,7 @@ hackcheck/
 │   ├── pitch.js            # Stage 5: Pitch generation & review
 │   ├── ai.js               # AI client layer (optional enhancement, auto-fallback)
 │   ├── i18n.js             # Bilingual (zh/en) strings
+│   ├── features.js         # Frontend feature flags (module visibility)
 │   └── data.js             # Configuration data (tech stack, review criteria, pattern library, etc.)
 ├── api/
 │   └── ai.js               # Vercel Serverless AI proxy

@@ -265,14 +265,20 @@ function escapeHtml(text) {
 // 总分计算
 // ============================================
 function updateOverallScore() {
-  const scores = [
-    AppState.topic.score || 0,
-    AppState.tech.score || 0,
-    AppState.dev.score || 0,
-    AppState.demo.detected ? 100 : 0,
-    AppState.pitch.review.score || 0
-  ];
-  const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  // 各模块得分；被 features.js 关闭的模块不参与总分
+  const moduleScores = {
+    topic: AppState.topic.score || 0,
+    tech: AppState.tech.score || 0,
+    dev: AppState.dev.score || 0,
+    demo: AppState.demo.detected ? 100 : 0,
+    pitch: AppState.pitch.review.score || 0,
+  };
+  const scores = Object.keys(moduleScores)
+    .filter(isModuleEnabled)
+    .map(id => moduleScores[id]);
+  const avg = scores.length
+    ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+    : 0;
   $('#overallScore').textContent = avg;
   const progress = $('#overallProgress');
   const circumference = 2 * Math.PI * 34;
@@ -378,21 +384,43 @@ function resetAll() {
 }
 
 // ============================================
+// 功能开关（js/features.js）：隐藏被关闭模块的导航入口与页面区块
+// ============================================
+function applyFeatureFlags() {
+  Object.keys(FEATURES.modules).forEach(id => {
+    if (isModuleEnabled(id)) return;
+    // 侧边栏整组隐藏（含子项与 flyout）
+    const group = document.querySelector(`.nav-group[data-module="${id}"]`);
+    if (group) group.style.display = 'none';
+    // 页面区块隐藏（内联 display 优先级高于 .active 类，切换逻辑不会误显示）
+    const section = document.getElementById(`module-${id}`);
+    if (section) section.style.display = 'none';
+  });
+}
+
+// ============================================
 // 初始化
 // ============================================
 function init() {
   initI18n();
   loadState();
+  applyFeatureFlags();
   initNavigation();
   // 激活 loadState 恢复的模块（HTML 默认 active 是 topic，需要同步到实际 currentModule）
+  // 恢复的模块若已被 features.js 关闭，退回第一个启用的模块
+  if (!isModuleEnabled(AppState.currentModule)) {
+    AppState.currentModule = Object.keys(FEATURES.modules).find(isModuleEnabled) || 'topic';
+    AppState.currentSubmodule = null;
+  }
   if (AppState.currentModule && AppState.currentModule !== 'topic') {
     switchModule(AppState.currentModule);
   }
-  initTopicModule();
-  initTechModule();
-  initDevModule();
-  initDemoModule();
-  initPitchModule();
+  // 各模块初始化；被 features.js 关闭的模块不初始化（不绑事件、不恢复UI）
+  if (isModuleEnabled('topic')) initTopicModule();
+  if (isModuleEnabled('tech')) initTechModule();
+  if (isModuleEnabled('dev')) initDevModule();
+  if (isModuleEnabled('demo')) initDemoModule();
+  if (isModuleEnabled('pitch')) initPitchModule();
 
   // 初始化时选中第一个模块的第一个子项（在 UI 恢复之前，避免后续错误阻止导航）
   const firstSub = MODULE_SUBMODULES[AppState.currentModule]?.[0];
@@ -402,9 +430,9 @@ function init() {
 
   $('#resetBtn').addEventListener('click', resetAll);
 
-  // 恢复UI状态（try-catch 防止单个模块恢复失败影响整体）
+  // 恢复UI状态（try-catch 防止单个模块恢复失败影响整体；关闭的模块跳过）
   try {
-    if (AppState.topic.analyzed) {
+    if (isModuleEnabled('topic') && AppState.topic.analyzed) {
       $('#projectDescription').value = AppState.topic.description;
       $('#charCount').textContent = `${AppState.topic.description.length} ${t('topic.charCount')}`;
       if (AppState.topic.githubResults.length > 0) renderGithubResults(AppState.topic.githubResults);
@@ -414,20 +442,20 @@ function init() {
   } catch(e) { console.warn('恢复选题模块UI失败:', e.message); }
 
   try {
-    if (AppState.dev.scanned) {
+    if (isModuleEnabled('dev') && AppState.dev.scanned) {
       renderFileList();
       renderScanResults();
     }
   } catch(e) { console.warn('恢复代码扫描模块UI失败:', e.message); }
 
   try {
-    if (AppState.pitch.review.score > 0) {
+    if (isModuleEnabled('pitch') && AppState.pitch.review.score > 0) {
       $('#pitchScore').textContent = AppState.pitch.review.score;
       $('#navScorePitch').textContent = AppState.pitch.review.score;
       calculateReviewScore();
     }
 
-    if (AppState.pitch.generated) {
+    if (isModuleEnabled('pitch') && AppState.pitch.generated) {
       $('#pitchProjectName').value = localStorage.getItem('hackcheck_pitch_name') || '';
       $('#pitchOneLiner').value = localStorage.getItem('hackcheck_pitch_liner') || '';
       $('#pitchDescription').value = localStorage.getItem('hackcheck_pitch_desc') || '';
